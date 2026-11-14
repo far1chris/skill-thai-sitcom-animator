@@ -165,10 +165,10 @@
     const noBlurViews = window.NO_BLUR_VIEWS || [];
 
     let rackBlur = 0;
-    if (activeCard && !noBlurViews.includes(s.view) && activeCard.type !== 'inventory') {
+    if (s.blur === true && activeCard && !noBlurViews.includes(s.view) && activeCard.type !== 'inventory') {
       const at = activeCard.at !== undefined ? activeCard.at : 0.4;
       const ca = prog(lt, at, at + 0.45) * (1 - 0.85 * prog(lt, s.dur - 0.32, s.dur));
-      rackBlur = ca * (activeCard.type === 'flow' ? 4.5 : 2.8);
+      rackBlur = ca * (activeCard.type === 'flow' ? 3.5 : 2.2);
     }
 
     if (fn) {

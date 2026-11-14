@@ -111,16 +111,16 @@ function poseSit(t, o = {}) {
 function poseBike(t, speed = 1.6) {
   const p = t * TAU * speed;
   return {
-    by: Math.sin(p * 2) * 1.6, lean: 0.16,
+    by: Math.sin(p * 2) * 1.4, lean: 0.24,
     legs: [
-      { a: 0.78 + 0.36 * Math.sin(p), b: Math.max(0.2, 0.88 + 0.42 * Math.cos(p)) },
-      { a: 0.78 - 0.36 * Math.sin(p), b: Math.max(0.2, 0.88 - 0.42 * Math.cos(p)) }
+      { a: 0.62 + 0.34 * Math.sin(p), b: Math.max(0.28, 0.92 + 0.42 * Math.cos(p)) },
+      { a: 0.62 - 0.34 * Math.sin(p), b: Math.max(0.28, 0.92 - 0.42 * Math.cos(p)) }
     ],
     arms: [
-      { a: 0.72, b: 0.36 },
-      { a: 0.68, b: 0.38 }
+      { a: 0.88, b: 0.46 },
+      { a: 0.84, b: 0.48 }
     ],
-    tilt: -0.06
+    tilt: -0.08
   };
 }
 
@@ -333,9 +333,9 @@ function drawSitcomPerson(c, x, y, s, o = {}) {
 
     // Signature Adult Sitcom Oval Eyes + Half-Lidded Upper Eyelids
     const eyePositions = [-8 + fx, 10 + fx];
-    const lidRatio = ex === 'shock' ? 0.08 : ex === 'deadpan' || ex === 'annoyed' ? 0.54 : ex === 'happy' ? 0.22 : (K.eyelid || 0.42);
-    const pupilShiftX = ex === 'side_eye' ? -3.2 : (o.lookX || 1.2);
-    const pupilShiftY = o.lookY || 0.5;
+    const lidRatio = ex === 'shock' ? 0.08 : ex === 'deadpan' || ex === 'annoyed' ? 0.50 : ex === 'happy' ? 0.24 : (K.eyelid || 0.38);
+    const pupilShiftX = ex === 'side_eye' ? -3.2 : (o.lookX || 1.3);
+    const pupilShiftY = o.lookY || 0.8;
 
     for (const exPos of eyePositions) {
       if (blink || ex === 'sigh') {
@@ -345,16 +345,16 @@ function drawSitcomPerson(c, x, y, s, o = {}) {
       }
       // White sclera oval
       c.save();
-      c.beginPath(); c.ellipse(exPos, -4, 7.2, 6.2, 0, 0, TAU);
+      c.beginPath(); c.ellipse(exPos, -4, 7.2, 6.4, 0, 0, TAU);
       c.fillStyle = '#FFFFFF'; c.fill();
       c.clip();
       // Pupil
-      const pr = ex === 'shock' ? 2.1 : 2.5;
+      const pr = ex === 'shock' ? 2.1 : 2.3;
       c.fillStyle = INK_OUTLINE;
-      c.beginPath(); c.arc(exPos + pupilShiftX, -3.5 + pupilShiftY, pr, 0, TAU); c.fill();
+      c.beginPath(); c.arc(exPos + pupilShiftX, -2.5 + pupilShiftY, pr, 0, TAU); c.fill();
       // Half-lidded upper eyelid (skin tone with dark bottom line)
       if (lidRatio > 0.1) {
-        const lidY = -10.2 + lidRatio * 12.4;
+        const lidY = -10.2 + lidRatio * 12.0;
         c.fillStyle = K.skin;
         c.fillRect(exPos - 9, -12, 18, lidY + 12);
         c.strokeStyle = INK_OUTLINE; c.lineWidth = 2.2;
@@ -363,7 +363,7 @@ function drawSitcomPerson(c, x, y, s, o = {}) {
       c.restore();
       // Outer eye ink ring
       c.strokeStyle = INK_OUTLINE; c.lineWidth = 2.3;
-      c.beginPath(); c.ellipse(exPos, -4, 7.2, 6.2, 0, 0, TAU); c.stroke();
+      c.beginPath(); c.ellipse(exPos, -4, 7.2, 6.4, 0, 0, TAU); c.stroke();
 
       if (K.glasses || o.glasses) {
         c.strokeStyle = '#1E293B'; c.lineWidth = 2.2;
@@ -520,7 +520,7 @@ function drawBicycle(c, x, y, s = 1, o = {}) {
   // Rider (if not disabled)
   if (o.rider !== false) {
     const riderPose = poseBike(t, speed);
-    drawSitcomPerson(c, seatX + 10, -28, 1.0, {
+    drawSitcomPerson(c, seatX + 10, -14, 1.0, {
       t,
       cast: o.cast || 'ton',
       colors: o.colors,
@@ -530,6 +530,14 @@ function drawBicycle(c, x, y, s = 1, o = {}) {
       shadow: false
     });
   }
+
+  // Rotating crank arm & pedal (synced with pedaling cycle)
+  const pedX = crankX + Math.cos(spin) * 18, pedY = crankY + Math.sin(spin) * 18;
+  c.strokeStyle = INK_OUTLINE; c.lineWidth = 5; c.lineCap = 'round';
+  c.beginPath(); c.moveTo(crankX, crankY); c.lineTo(pedX, pedY); c.stroke();
+  c.strokeStyle = '#9CA3AF'; c.lineWidth = 2.5;
+  c.beginPath(); c.moveTo(crankX, crankY); c.lineTo(pedX, pedY); c.stroke();
+  inkrr(c, pedX - 8, pedY - 3, 16, 6, 2, '#18181B', 1.8);
 
   // Handlebars & grips (drawn on top so hands align cleanly)
   c.strokeStyle = INK_OUTLINE; c.lineWidth = 9;
@@ -610,13 +618,16 @@ function hand(c, x, y, ang = 0, s = 1, o = {}) {
   }
   if (o.phone) {
     c.save(); c.translate(0, -82);
-    inkrr(c, -42, -74, 84, 148, 12, '#18181B', 3);
-    inkrr(c, -36, -64, 72, 126, 8, '#F8FAFC', 2);
+    inkrr(c, -44, -74, 88, 148, 12, '#18181B', 3);
+    inkrr(c, -38, -64, 76, 126, 8, '#F8FAFC', 2);
     // Banking / Chat screen header
-    c.fillStyle = o.phoneHeader || '#16A34A'; rr(c, -36, -64, 72, 26, [8, 8, 0, 0]); c.fill();
-    txt(c, o.phoneTitle || 'K-PLUS', 0, -46, 12, '#FFFFFF', 800, 'center');
-    txt(c, o.phoneText || '฿ 42.50', 0, -4, 18, '#DC2626', 800, 'center');
-    txt(c, o.phoneSub || 'ยอดเงินคงเหลือ', 0, 18, 10, '#64748B', 600, 'center');
+    c.fillStyle = o.phoneHeader || '#16A34A'; rr(c, -38, -64, 76, 26, [8, 8, 0, 0]); c.fill();
+    const titleStr = o.phoneTitle || 'K-PLUS';
+    const textStr = o.phoneText || '฿ 42.50';
+    const subStr = o.phoneSub || 'ยอดเงินคงเหลือ';
+    txt(c, titleStr, 0, -46, fitTextSize(c, titleStr, 64, 12, 9, 800), '#FFFFFF', 800, 'center');
+    txt(c, textStr, 0, -4, fitTextSize(c, textStr, 66, 17, 11, 800), '#DC2626', 800, 'center');
+    txt(c, subStr, 0, 18, fitTextSize(c, subStr, 66, 10, 7.5, 600), '#64748B', 600, 'center');
     c.restore();
   }
   if (o.coffee) {
@@ -660,10 +671,13 @@ function streetCafeStage(c, t = 0, o = {}) {
       c.beginPath(); c.arc(tx + ox, ty + oy, rr, 0, TAU); c.fill(); c.stroke();
     }
   };
-  drawTreeCanopy(430 + bgShift * 0.6, 290, 74, '#65933D', '#476A2A');
+  // Grounded background tree on far sidewalk (positioned clear of foreground rider head)
+  const midTreeX = 595 + bgShift * 0.6;
+  inkrr(c, midTreeX - 10, 265, 20, 205, 4, '#5C4028', 2.4);
+  drawTreeCanopy(midTreeX, 252, 58, '#65933D', '#476A2A');
 
   // Main Tree Trunk on left sidewalk
-  const treeX = 165 - pan * 0.6;
+  const treeX = 210 - pan * 0.4;
   inkrr(c, treeX - 24, 90, 48, 410, 8, '#5C4028', 2.8);
   drawTreeCanopy(treeX + 10, 68, 128, '#5B8736', '#3E6024');
 
@@ -709,7 +723,7 @@ function streetCafeStage(c, t = 0, o = {}) {
   }
   // Awning front valance banner with "COFFEE & BAKERY"
   inkrr(c, awnX - 4, awnY + awnH - 4, awnW + 8, 46, 4, '#244735', 2.8);
-  txt(c, o.shopTitle || 'COFFEE & BAKERY', awnX + awnW / 2, awnY + awnH + 29, 31, '#F5EFE6', 800, 'center');
+  txt(c, o.shopTitle || 'COFFEE & BAKERY', awnX + awnW / 2 - 20, awnY + awnH + 29, 29, '#F5EFE6', 800, 'center');
 
   // Sidewalk & Curb + Asphalt Street + Crosswalk Stripe
   // Asphalt road
@@ -731,7 +745,7 @@ function streetCafeStage(c, t = 0, o = {}) {
 
   // Multi-Plate Green Street Sign Pole on left ("Oak St." / "Maple Ave." / "3rd St.")
   if (o.streetSign !== false) {
-    const sx = 128 - pan * 0.6;
+    const sx = 178 - pan * 0.35;
     inkrr(c, sx - 7, 65, 14, 410, 4, '#3F3F46', 2.6);
     inkrr(c, sx - 26, 462, 52, 18, 6, '#52525B', 2.6);
     const signs = o.signs || ['ซอยสุขุมวิท 21', 'ถ.อโศกมนตรี', 'คาเฟ่เปิดใหม่'];
@@ -915,9 +929,12 @@ function cardPos(pos, w, h) {
   const shorts = typeof window !== 'undefined' && window.SHORTS_MODE;
   const maxX = shorts ? (W - w - 140) : (W - w - 46);
   let x, y;
-  if (pos === 'tl' || pos === 'left') { x = 56; y = 54; }
-  else if (pos === 'tr') { x = W - w - 56; y = 178; }
-  else if (pos === 'r' || pos === 'right') { x = W - w - 56; y = (H - h) / 2 + 24; }
+  if (pos === 'tl' || pos === 'left') { x = 56; y = 44; }
+  else if (pos === 'tm' || pos === 'tc') { x = clamp((W - w) / 2 - 30, 260, Math.max(260, W - w - 380)); y = 40; }
+  else if (pos === 'tr') { x = W - w - 46; y = 186; }
+  else if (pos === 'r' || pos === 'right') { x = W - w - 46; y = Math.max(186, (H - h) / 2 + 28); }
+  else if (pos === 'bl') { x = 56; y = H - h - 92; }
+  else if (pos === 'br') { x = W - w - 46; y = H - h - 92; }
   else { x = (W - w) / 2; y = (H - h) / 2 - 20; }
   return [clamp(x, 24, Math.max(24, maxX)), clamp(y, 24, Math.max(24, H - h - 76))];
 }
@@ -1071,28 +1088,28 @@ function drawCard(c, rawCard, lt, sceneDur) {
 }
 
 function drawFlow(c, card, lt) {
-  const cx = 480, top = 110;
+  const cx = 480, top = 46;
   const headSz = fitTextSize(c, card.head, 640, 22, 16, 700);
   c.font = `700 ${headSz}px ${FONT}`; const hw = Math.min(700, c.measureText(card.head).width + 48);
-  inkrr(c, cx - hw / 2, top, hw, 46, 23, '#FACC15', 3);
-  txt(c, card.head, cx, top + 30, headSz, INK, 800, 'center');
+  inkrr(c, cx - hw / 2, top, hw, 44, 22, '#FACC15', 3);
+  txt(c, card.head, cx, top + 29, headSz, INK, 800, 'center');
   const k = easeOut(prog(lt, 0.2, 0.9));
   c.strokeStyle = INK_OUTLINE; c.lineWidth = 3.5;
   for (const s of [-1, 1]) {
-    c.beginPath(); c.moveTo(cx, top + 46);
-    c.quadraticCurveTo(cx + s * 190 * k, top + 58, cx + s * 195 * k, top + 98 * k + 2);
+    c.beginPath(); c.moveTo(cx, top + 44);
+    c.quadraticCurveTo(cx + s * 190 * k, top + 56, cx + s * 195 * k, top + 84 * k + 2);
     c.stroke();
   }
   [['left', -1, 0.5], ['right', 1, 0.95]].forEach(([key, s, at]) => {
     const b = card[key]; if (!b) return;
     const ka = easeBack(prog(lt, at, at + 0.4)); if (ka <= 0) return;
-    const w = 320, h = 186, x = cx + s * 195 - w / 2, y = top + 98;
+    const w = 320, h = 178, x = cx + s * 195 - w / 2, y = top + 84;
     c.save(); c.globalAlpha *= clamp(ka); c.translate(x + w / 2, y); c.scale(0.9 + 0.1 * ka, 0.9 + 0.1 * ka); c.translate(-w / 2, 0);
     cardBox(c, 0, 0, w, h);
     txt(c, b.tag, w / 2, 34, fitTextSize(c, b.tag, w - 30, 19, 13, 700), '#4B5563', 700, 'center');
-    txt(c, b.icon, w / 2, 92, 42, INK, 400, 'center');
-    txt(c, b.res, w / 2, 138, fitTextSize(c, b.res, w - 30, 22, 14, 700), b.danger ? RED : GREEN, 800, 'center');
-    if (b.en) txt(c, b.en, w / 2, 166, fitTextSize(c, b.en, w - 30, 12, 10, 600), '#6B7280', 600, 'center');
+    txt(c, b.icon, w / 2, 88, 38, INK, 400, 'center');
+    txt(c, b.res, w / 2, 134, fitTextSize(c, b.res, w - 30, 22, 14, 700), b.danger ? RED : GREEN, 800, 'center');
+    if (b.en) txt(c, b.en, w / 2, 160, fitTextSize(c, b.en, w - 30, 12, 10, 600), '#6B7280', 600, 'center');
     c.restore();
   });
 }
@@ -1100,7 +1117,7 @@ function drawFlow(c, card, lt) {
 // Sitcom Everyday Status Telemetry (supports Wallet Baht, Caffeine, Phone Battery, Mood, or Custom Bar)
 function drawTele(c, s, lt) {
   const tl = s.tele || s.telemetry; if (!tl) return;
-  const x = W - 46, y = 36, w = 320;
+  const x = W - 46, y = 26, w = 320;
   const dayStr = tl.day === 0 ? '☀️ เช้าวันทำงาน' : `📍 ${tl.day}`;
   const timeStr = tl.time || '';
   const subLabel = tl.label || tl.shift || '';
@@ -1121,26 +1138,26 @@ function drawTele(c, s, lt) {
   }
 
   c.save(); c.globalAlpha = clamp(lt / 0.3);
-  const h = 62 + (bar ? 30 : 0) + (subLabel ? 26 : 0);
+  const h = 56 + (bar ? 28 : 0) + (subLabel ? 24 : 0);
   cardBox(c, x - w, y, w, h, '#FFFDF9');
-  txt(c, dayStr, x - w + 16, y + 26, fitTextSize(c, dayStr, w - 120, 15, 12, 700), INK, 700);
-  if (timeStr) txt(c, timeStr, x - 16, y + 46, 28, INK, 800, 'right');
+  txt(c, dayStr, x - w + 16, y + 24, fitTextSize(c, dayStr, w - 120, 15, 12, 700), INK, 700);
+  if (timeStr) txt(c, timeStr, x - 16, y + 42, 26, INK, 800, 'right');
 
   const statusTxt = tl.statusText || (tl.mood ? `อารมณ์: ${tl.mood}` : '');
-  if (statusTxt) txt(c, statusTxt, x - w + 16, y + 50, 14, '#B45309', 700);
+  if (statusTxt) txt(c, statusTxt, x - w + 16, y + 46, 13.5, '#B45309', 700);
 
-  let yy = y + 62;
+  let yy = y + 56;
   if (bar) {
     const r = clamp(bar.ratio !== undefined ? bar.ratio : (bar.value / (bar.max || 100)));
-    txt(c, bar.label || 'สถานะ', x - w + 16, yy + 18, 13, '#4B5563', 700);
-    inkrr(c, x - w + 92, yy + 7, 122, 12, 6, '#E5E7EB', 1.8);
-    inkrr(c, x - w + 92, yy + 7, Math.max(8, 122 * r), 12, 6, bar.color || '#22C55E', 1.8);
-    txt(c, bar.text || `${bar.value}${bar.unit || ''}`, x - 16, yy + 19, 14, bar.warn ? RED : INK, 800, 'right');
-    yy += 30;
+    txt(c, bar.label || 'สถานะ', x - w + 16, yy + 17, 13, '#4B5563', 700);
+    inkrr(c, x - w + 92, yy + 6, 122, 12, 6, '#E5E7EB', 1.8);
+    inkrr(c, x - w + 92, yy + 6, Math.max(8, 122 * r), 12, 6, bar.color || '#22C55E', 1.8);
+    txt(c, bar.text || `${bar.value}${bar.unit || ''}`, x - 16, yy + 18, 14, bar.warn ? RED : INK, 800, 'right');
+    yy += 28;
   }
 
   if (subLabel) {
-    txt(c, subLabel, x - w + 16, yy + 15, fitTextSize(c, subLabel, w - 32, 14, 11, 700), '#D97706', 700);
+    txt(c, subLabel, x - w + 16, yy + 14, fitTextSize(c, subLabel, w - 32, 13.5, 11, 700), '#D97706', 700);
   }
   c.restore();
 }

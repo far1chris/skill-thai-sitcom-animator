@@ -31,7 +31,7 @@ const SCENES = [
     },
     hud: {
       type: 'chalkboard',
-      pos: 'tr',
+      pos: 'tm',
       at: 1.0,
       badge: '☕ ป้ายหน้าร้าน · TODAY SPECIAL',
       title: ['อเมริกาโน่ส้มยูซุคั่วกลาง', 'แก้วละ 145 บาท'],
@@ -91,7 +91,7 @@ const SCENES = [
     },
     hud: {
       type: 'social',
-      pos: 'tr',
+      pos: 'tm',
       at: 0.6,
       app: 'LINE กลุ่มแผนก',
       user: 'พี่บอส (หัวหน้า)',

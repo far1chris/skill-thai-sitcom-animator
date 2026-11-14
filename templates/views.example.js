@@ -60,14 +60,14 @@ const VIEWS = {
       rider: false
     });
 
-    drawSitcomPerson(c, 470, 615, 1.38, {
+    drawSitcomPerson(c, 485, 615, 1.38, {
       t: lt,
       cast: 'ton',
-      dir: 1,
-      expr: lt > 1.2 ? 'awkward' : 'deadpan',
+      dir: -1,
+      expr: lt > 1.2 ? 'awkward' : 'shock',
       sweat: lt > 1.0,
-      phone: true,
-      talking: lt < (s.voDur || 5)
+      talking: lt < (s.voDur || 5),
+      pose: poseStand(lt, { arms: [{ a: 0.25, b: 1.1 }, { a: 0.2, b: 0.3 }] })
     });
 
     // Foreground Macro POV Hand holding smartphone with 142.50 Baht balance
@@ -90,7 +90,7 @@ const VIEWS = {
       // Left Half: Ton panicking on the street with his phone
       (ctx, t) => {
         streetCafeStage(ctx, t, { pan: 0, chalkboard: false });
-        drawSitcomPerson(ctx, 310, 625, 1.45, {
+        drawSitcomPerson(ctx, 250, 625, 1.42, {
           t,
           cast: 'ton',
           dir: 1,
@@ -103,7 +103,7 @@ const VIEWS = {
       // Right Half: Boss in the office pointing at the 08:30 clock
       (ctx, t) => {
         officeStage(ctx, t, { deskX: 740, boardTitle: '⏰ 08:30 ประชุมด่วน!' });
-        drawSitcomPerson(ctx, 880, 600, 1.42, {
+        drawSitcomPerson(ctx, 975, 615, 1.4, {
           t,
           cast: 'boss',
           dir: -1,
@@ -137,7 +137,7 @@ const VIEWS = {
     c.restore();
 
     // Ton turbo-pedaling at 3.8x speed with panic sweat
-    drawBicycle(c, 380 + Math.sin(lt * 12) * 10, 640, 1.34, {
+    drawBicycle(c, 420 + Math.sin(lt * 12) * 10, 656, 1.24, {
       t: lt,
       speed: 3.8,
       dir: 1,
