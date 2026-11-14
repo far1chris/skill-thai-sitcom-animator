@@ -44,6 +44,86 @@ function limb(c, x1, y1, x2, y2, w, col, sh, outlineW = 2.6) {
     c.strokeStyle = sh; c.lineWidth = w * 0.34; c.beginPath(); c.moveTo(x1 + nx, y1 + ny); c.lineTo(x2 + nx, y2 + ny); c.stroke();
   }
 }
+
+// Analytical 2-bone Inverse Kinematics solver (bendSign: -1 pushes knee forward/+x, +1 drops elbow naturally)
+function solveIK2(x0, y0, tx, ty, L1, L2, bendSign = 1) {
+  const dx = tx - x0, dy = ty - y0;
+  const rawD = Math.hypot(dx, dy) || 0.001;
+  const d = clamp(rawD, Math.abs(L1 - L2) + 0.5, L1 + L2 - 0.25);
+  const baseAng = Math.atan2(dy, dx);
+  const cosA = clamp((L1 * L1 + d * d - L2 * L2) / (2 * L1 * d), -1, 1);
+  const ang = baseAng + bendSign * Math.acos(cosA);
+  return [x0 + L1 * Math.cos(ang), y0 + L1 * Math.sin(ang)];
+}
+
+function drawSegHighlight(c, x1, y1, x2, y2, w, sh) {
+  if (!sh) return;
+  const dx = x2 - x1, dy = y2 - y1, L = Math.hypot(dx, dy) || 1;
+  const nx = (-dy / L) * w * 0.26, ny = (dx / L) * w * 0.26;
+  c.strokeStyle = sh; c.lineWidth = w * 0.34; c.lineCap = 'round';
+  c.beginPath(); c.moveTo(x1 + nx, y1 + ny); c.lineTo(x2 + nx, y2 + ny); c.stroke();
+}
+
+// Seamless 2-segment leg: fused outer ink contour first, flat denim fill second (no U-ring across knee)
+function drawJointedLeg(c, hx, hy, kx, ky, ax, ay, K, thin = 1, isBack = false, shoeAngle = 0) {
+  const col = isBack ? mix(K.pants, '#000000', 0.18) : K.pants;
+  const sh = isBack ? null : K.pantsSh;
+  const w1 = 16.5 * thin, w2 = 14.5 * thin, ow = 2.6;
+  c.lineCap = 'round'; c.lineJoin = 'round';
+  // Pass 1: fused outline
+  c.strokeStyle = INK_OUTLINE;
+  c.lineWidth = w1 + ow * 2; c.beginPath(); c.moveTo(hx, hy); c.lineTo(kx, ky); c.stroke();
+  c.lineWidth = w2 + ow * 2; c.beginPath(); c.moveTo(kx, ky); c.lineTo(ax, ay); c.stroke();
+  // Pass 2: seamless denim fill + highlight
+  c.strokeStyle = col;
+  c.lineWidth = w1; c.beginPath(); c.moveTo(hx, hy); c.lineTo(kx, ky); c.stroke();
+  c.lineWidth = w2; c.beginPath(); c.moveTo(kx, ky); c.lineTo(ax, ay); c.stroke();
+  drawSegHighlight(c, hx, hy, kx, ky, w1, sh);
+  drawSegHighlight(c, kx, ky, ax, ay, w2, sh);
+  // Rolled denim cuff aligned perpendicular to shin right above sneaker
+  const sdx = ax - kx, sdy = ay - ky, sL = Math.hypot(sdx, sdy) || 1;
+  const ux = sdx / sL, uy = sdy / sL;
+  c.save(); c.translate(ax - ux * 6.5, ay - uy * 6.5); c.rotate(Math.atan2(sdy, sdx) - Math.PI / 2);
+  inkrr(c, -9, -4, 18, 8, 3, isBack ? mix(K.cuff || '#7BA3C7', '#000000', 0.14) : (K.cuff || '#7BA3C7'), 2.2);
+  c.restore();
+  // Sneaker with sole & laces
+  c.save(); c.translate(ax, ay); c.rotate(shoeAngle);
+  inkrr(c, -8, -4, 26, 11, 5, isBack ? mix(K.shoe, '#000000', 0.14) : K.shoe, 2.5);
+  c.fillStyle = K.shoeSole || '#D6CFC2'; c.fillRect(-7, 4, 24, 3);
+  c.strokeStyle = INK_OUTLINE; c.lineWidth = 1.8;
+  c.beginPath(); c.moveTo(4, -3); c.lineTo(7, -1); c.moveTo(9, -3); c.lineTo(12, -1); c.stroke();
+  c.restore();
+}
+
+// Seamless 2-segment arm with rolled shirt cuff cleanly below elbow (no ring across elbow crease)
+function drawJointedArm(c, sx, sy, ex, ey, wx, wy, K, shirtCol, thin = 1, isBack = false) {
+  const skinCol = isBack ? mix(K.skin, '#000000', 0.12) : K.skin;
+  const skinSh = isBack ? null : K.skinSh;
+  const shirtSh = isBack ? null : K.shirtSh;
+  const wU = 14 * thin, wL = 11 * thin;
+  const cuffFrac = 0.18;
+  const cx = ex + (wx - ex) * cuffFrac, cy = ey + (wy - ey) * cuffFrac;
+  c.lineCap = 'round'; c.lineJoin = 'round';
+  // Pass 1: fused outline
+  c.strokeStyle = INK_OUTLINE;
+  c.lineWidth = wU + 5.2; c.beginPath(); c.moveTo(sx, sy); c.lineTo(ex, ey); c.lineTo(cx, cy); c.stroke();
+  c.lineWidth = wL + 5.0; c.beginPath(); c.moveTo(cx, cy); c.lineTo(wx, wy); c.stroke();
+  // Pass 2: forearm skin then continuous rolled shirt sleeve over elbow
+  c.strokeStyle = skinCol; c.lineWidth = wL;
+  c.beginPath(); c.moveTo(cx, cy); c.lineTo(wx, wy); c.stroke();
+  drawSegHighlight(c, cx, cy, wx, wy, wL, skinSh);
+  c.strokeStyle = shirtCol; c.lineWidth = wU;
+  c.beginPath(); c.moveTo(sx, sy); c.lineTo(ex, ey); c.lineTo(cx, cy); c.stroke();
+  drawSegHighlight(c, sx, sy, ex, ey, wU, shirtSh);
+  // Rolled sleeve cuff perpendicular to forearm
+  c.save(); c.translate(cx, cy); c.rotate(Math.atan2(wy - ey, wx - ex) - Math.PI / 2);
+  inkrr(c, -8.5 * thin, -4.5, 17 * thin, 9, 4, shirtCol, 2.3);
+  c.restore();
+  // Hand with ink outline
+  c.fillStyle = skinCol; c.strokeStyle = INK_OUTLINE; c.lineWidth = 2.4;
+  c.beginPath(); c.arc(wx, wy, 6.8, 0, TAU); c.fill(); c.stroke();
+  return [wx, wy];
+}
 function txt(c, s, x, y, size, col, weight = 700, align = 'left', base = 'alphabetic') {
   c.font = `${weight} ${size}px ${FONT}`; c.fillStyle = col; c.textAlign = align; c.textBaseline = base; c.fillText(s, x, y);
 }
@@ -111,16 +191,16 @@ function poseSit(t, o = {}) {
 function poseBike(t, speed = 1.6) {
   const p = t * TAU * speed;
   return {
-    by: Math.sin(p * 2) * 1.4, lean: 0.24,
+    by: Math.sin(p * 2) * 1.2, lean: 0.12,
     legs: [
-      { a: 0.62 + 0.34 * Math.sin(p), b: Math.max(0.28, 0.92 + 0.42 * Math.cos(p)) },
-      { a: 0.62 - 0.34 * Math.sin(p), b: Math.max(0.28, 0.92 - 0.42 * Math.cos(p)) }
+      { a: 0.56 + 0.34 * Math.sin(p), b: Math.max(0.32, 0.96 + 0.38 * Math.cos(p)) },
+      { a: 0.56 - 0.34 * Math.sin(p), b: Math.max(0.32, 0.96 - 0.38 * Math.cos(p)) }
     ],
     arms: [
-      { a: 0.88, b: 0.46 },
-      { a: 0.84, b: 0.48 }
+      { a: 0.72, b: 0.55 },
+      { a: 0.68, b: 0.50 }
     ],
-    tilt: -0.08
+    tilt: -0.06
   };
 }
 
@@ -201,68 +281,25 @@ function drawSmartphoneProp(c, x, y, s = 1, glowScreen = true) {
   c.restore();
 }
 
-function drawSitcomPerson(c, x, y, s, o = {}) {
-  const charPreset = typeof o.cast === 'string' && CAST[o.cast] ? CAST[o.cast] : PROTAGONIST;
-  const P = o.pose || poseStand(o.t || 0), K = { ...PROTAGONIST, ...charPreset, ...(o.colors || {}) };
-  const thin = o.thin ? 0.88 : 1;
-  const shiverX = o.shiver ? Math.sin((o.t || 0) * 42) * 1.6 : 0;
-  c.save(); c.translate(x + shiverX, y); c.scale(s * (o.dir || 1), s);
-  if (o.shadow !== false) { c.fillStyle = 'rgba(24,24,27,0.22)'; c.beginPath(); c.ellipse(0, 0, 36, 7, 0, 0, TAU); c.fill(); }
-  const by = P.by || 0, hipY = -92 + by, torsoH = 64;
-
-  const leg = (hx, L, col, sh, isBack = false) => {
-    const kx = hx + 45 * Math.sin(L.a), ky = hipY + 45 * Math.cos(L.a);
-    const sa = L.a - L.b, ax = kx + 45 * Math.sin(sa), ay = ky + 45 * Math.cos(sa);
-    limb(c, hx, hipY, kx, ky, 16.5 * thin, col, sh, 2.6);
-    limb(c, kx, ky, ax, ay, 14.5 * thin, col, sh, 2.6);
-    // Rolled denim cuff at ankle (matching reference image!)
-    c.save(); c.translate(ax, ay - 6); c.rotate(sa * 0.35);
-    inkrr(c, -9, -4, 18, 8, 3, K.cuff || '#7BA3C7', 2.2);
-    c.restore();
-    // Clean white sneaker with sole & laces
-    c.save(); c.translate(ax, ay);
-    inkrr(c, -8, -4, 26, 11, 5, isBack ? mix(K.shoe, '#000000', 0.12) : K.shoe, 2.5);
-    c.fillStyle = K.shoeSole || '#D6CFC2'; c.fillRect(-7, 4, 24, 3);
-    c.strokeStyle = INK_OUTLINE; c.lineWidth = 1.8;
-    c.beginPath(); c.moveTo(4, -3); c.lineTo(7, -1); c.moveTo(9, -3); c.lineTo(12, -1); c.stroke();
-    c.restore();
-  };
-
-  c.save(); c.rotate(P.lean || 0);
-  const sh = (i) => [14 * thin * (i ? -1 : 1) * 0.3, -144 + by];
-  const arm = (i, A, col) => {
-    const [sx, sy] = sh(i);
-    const ex = sx + 32 * Math.sin(A.a), ey = sy + 32 * Math.cos(A.a);
-    const fa = A.a + A.b, wx = ex + 30 * Math.sin(fa), wy = ey + 30 * Math.cos(fa);
-    // Upper sleeve (button-down shirt)
-    limb(c, sx, sy, ex, ey, 14 * thin, col, K.shirtSh, 2.6);
-    // Forearm skin
-    limb(c, ex, ey, wx, wy, 11 * thin, K.skin, K.skinSh, 2.5);
-    // Rolled-up sleeve cuff at elbow (signature detail from reference image!)
-    c.save(); c.translate(ex, ey); c.rotate(A.a);
-    inkrr(c, -8.5 * thin, -5, 17 * thin, 9, 4, col, 2.3);
-    c.restore();
-    // Hand with ink outline
-    c.fillStyle = K.skin; c.strokeStyle = INK_OUTLINE; c.lineWidth = 2.4;
-    c.beginPath(); c.arc(wx, wy, 6.8, 0, TAU); c.fill(); c.stroke();
-    return [wx, wy];
-  };
-  c.restore();
-
-  // Back limbs
-  leg(-6, P.legs[1], mix(K.pants, '#000000', 0.18), null, true);
-  c.save(); c.rotate(P.lean || 0); arm(1, P.arms[1], mix(K.shirt, '#000000', 0.1)); c.restore();
-
+function drawSitcomUpperBody(c, K, o, P, thin = 1) {
+  const by = P.by || 0, torsoH = 58;
   // Torso (with continuous trapezius slope & button-up shirt details)
-  c.save(); c.rotate(P.lean || 0);
   inkrr(c, -22 * thin, -152 + by, 44 * thin, torsoH, 12, cyl(c, -22 * thin, 44 * thin, K.shirt, K.shirtHi, K.shirtSh), 2.7);
+  // Seated pelvis bridge (only needed when astride a saddle so front/rear leg angle meets smoothly)
+  if (P.seatedBridge) {
+    c.fillStyle = K.pants;
+    rr(c, -20.5 * thin, -96 + by, 41 * thin, 11, 4); c.fill();
+    c.strokeStyle = INK_OUTLINE; c.lineWidth = 2.6; c.lineCap = 'round';
+    c.beginPath(); c.moveTo(-20.5 * thin, -96 + by); c.lineTo(-20.5 * thin, -88 + by); c.stroke();
+    c.beginPath(); c.moveTo(20.5 * thin, -96 + by); c.lineTo(20.5 * thin, -88 + by); c.stroke();
+  }
   // Café apron if barista
   if (K.apron || o.apron) {
     inkrr(c, -18 * thin, -138 + by, 36 * thin, 48, 6, K.apron || '#2E5A44', 2.4);
   }
-  // Waistband + belt
-  inkrr(c, -21 * thin, -98 + by, 42 * thin, 14, 5, K.pants, 2.6);
-  c.fillStyle = '#27272A'; c.fillRect(-20 * thin, -99 + by, 40 * thin, 5);
+  // Clean black belt with buckle sitting flush over hip junction
+  inkrr(c, -21.5 * thin, -99.5 + by, 43 * thin, 6.5, 3, '#27272A', 2.4);
+  c.fillStyle = '#D4D4D8'; c.fillRect(2 * thin, -98.5 + by, 5, 4.5);
   // Neck & Shirt Collar + Placket Buttons
   inkrr(c, -6.5, -163 + by, 13, 15, 4, K.skin, 2.4);
   // Collar flaps
@@ -409,30 +446,66 @@ function drawSitcomPerson(c, x, y, s, o = {}) {
     }
   }
   c.restore();
-  c.restore();
+}
 
-  // Front limbs & Hand-Socket Props
-  leg(6, P.legs[0], K.pants, K.pantsSh, false);
-  c.save(); c.rotate(P.lean || 0);
-  const frontPose = o.coverMouth ? { a: 2.35, b: 1.05 } : o.phone ? { a: 0.72, b: 1.15 } : P.arms[0];
-  const front = arm(0, frontPose, K.shirt);
-  if (o.bag) {
-    inkrr(c, front[0] - 14, front[1] + 4, 28, 34, 6, '#F5EFE6', 2.4);
-    c.strokeStyle = INK_OUTLINE; c.lineWidth = 2.2;
-    c.beginPath(); c.arc(front[0], front[1] + 4, 7, Math.PI, 0); c.stroke();
-  }
-  if (o.coffee || o.milk) {
-    drawIcedCoffeeCup(c, front[0] + 6, front[1] - 2, 1);
-  }
-  if (o.phone) {
-    drawSmartphoneProp(c, front[0] + 8, front[1] - 6, 1, o.phoneGlow !== false);
-  }
-  c.restore();
+function drawSitcomPerson(c, x, y, s, o = {}) {
+  const charPreset = typeof o.cast === 'string' && CAST[o.cast] ? CAST[o.cast] : PROTAGONIST;
+  const P = o.pose || poseStand(o.t || 0), K = { ...PROTAGONIST, ...charPreset, ...(o.colors || {}) };
+  const thin = o.thin ? 0.88 : 1;
+  const shiverX = o.shiver ? Math.sin((o.t || 0) * 42) * 1.6 : 0;
+  c.save(); c.translate(x + shiverX, y); c.scale(s * (o.dir || 1), s);
+  if (o.shadow !== false) { c.fillStyle = 'rgba(24,24,27,0.22)'; c.beginPath(); c.ellipse(0, 0, 36, 7, 0, 0, TAU); c.fill(); }
+  const by = P.by || 0, hipY = -92 + by;
+
+  const leg = (hx, L, isBack = false) => {
+    const kx = hx + 45 * Math.sin(L.a), ky = hipY + 45 * Math.cos(L.a);
+    const sa = L.a - L.b, ax = kx + 45 * Math.sin(sa), ay = ky + 45 * Math.cos(sa);
+    drawJointedLeg(c, hx, hipY, kx, ky, ax, ay, K, thin, isBack, 0);
+  };
+  const arm = (i, A, col, isBack = false) => {
+    const sx = 14 * thin * (i ? -1 : 1) * 0.3, sy = -144 + by;
+    const ex = sx + 32 * Math.sin(A.a), ey = sy + 32 * Math.cos(A.a);
+    const fa = A.a + A.b, wx = ex + 30 * Math.sin(fa), wy = ey + 30 * Math.cos(fa);
+    return drawJointedArm(c, sx, sy, ex, ey, wx, wy, K, col, thin, isBack);
+  };
+  const withHipLean = (fn) => {
+    c.save();
+    if (P.lean) { c.translate(0, hipY); c.rotate(P.lean); c.translate(0, -hipY); }
+    fn();
+    c.restore();
+  };
+
+  // Far arm (behind body & hips) -> Back leg -> Tapered standing trouser pelvis -> Front leg -> Torso/Belt/Head/Front Arm
+  withHipLean(() => arm(1, P.arms[1], mix(K.shirt, '#000000', 0.1), true));
+  leg(-7, P.legs[1], true);
+  // Subtle standing trouser hip flare so legs meet the 42px waistband without a vertical step
+  c.fillStyle = K.pants;
+  c.beginPath();
+  c.moveTo(-20 * thin, -95 + by); c.lineTo(20 * thin, -95 + by);
+  c.lineTo(14.5 * thin, -82 + by); c.lineTo(-15.5 * thin, -82 + by);
+  c.closePath(); c.fill();
+  c.strokeStyle = INK_OUTLINE; c.lineWidth = 2.6; c.lineCap = 'round';
+  c.beginPath(); c.moveTo(-20 * thin, -95 + by); c.lineTo(-15.5 * thin, -82 + by); c.stroke();
+  c.beginPath(); c.moveTo(20 * thin, -95 + by); c.lineTo(14.5 * thin, -82 + by); c.stroke();
+  leg(6, P.legs[0], false);
+
+  withHipLean(() => {
+    drawSitcomUpperBody(c, K, o, P, thin);
+    const frontPose = o.coverMouth ? { a: 2.35, b: 1.05 } : o.phone ? { a: 0.72, b: 1.15 } : P.arms[0];
+    const front = arm(0, frontPose, K.shirt, false);
+    if (o.bag) {
+      inkrr(c, front[0] - 14, front[1] + 4, 28, 34, 6, '#F5EFE6', 2.4);
+      c.strokeStyle = INK_OUTLINE; c.lineWidth = 2.2;
+      c.beginPath(); c.arc(front[0], front[1] + 4, 7, Math.PI, 0); c.stroke();
+    }
+    if (o.coffee || o.milk) drawIcedCoffeeCup(c, front[0] + 6, front[1] - 2, 1);
+    if (o.phone) drawSmartphoneProp(c, front[0] + 8, front[1] - 6, 1, o.phoneGlow !== false);
+  });
   c.restore();
 }
 const drawPerson = drawSitcomPerson;
 
-// --------------------------------------------------------- CITY COMMUTER BICYCLE + RIDER (From Reference Image!)
+// --------------------------------------------------------- CITY COMMUTER BICYCLE + RIDER (IK Pedaling & Straddle Z-Order)
 function drawBicycle(c, x, y, s = 1, o = {}) {
   const t = o.t || 0;
   const speed = o.speed !== undefined ? o.speed : 1.6;
@@ -443,9 +516,18 @@ function drawBicycle(c, x, y, s = 1, o = {}) {
   c.save(); c.translate(x, y); c.scale(s * dir, s);
   // Ground shadow
   c.fillStyle = 'rgba(24,24,27,0.24)';
-  c.beginPath(); c.ellipse(0, 4, 118, 12, 0, 0, TAU); c.fill();
+  c.beginPath(); c.ellipse(0, 4, 120, 12, 0, 0, TAU); c.fill();
 
-  const rearX = -68, frontX = 68, wheelY = -42, wheelR = 40;
+  const rearX = -70, frontX = 70, wheelY = -42, wheelR = 40;
+  const crankX = -4, crankY = -36, crankR = 16;
+  const seatX = -32, seatY = -100;
+  const headX = 44, headY = -108;
+  const stemX = 39, stemY = -130;
+  const farGripX = 33, farGripY = -134;
+  const nearGripX = 16, nearGripY = -124;
+
+  const pNearX = crankX + Math.cos(spin) * crankR, pNearY = crankY + Math.sin(spin) * crankR;
+  const pFarX = crankX - Math.cos(spin) * crankR, pFarY = crankY - Math.sin(spin) * crankR;
 
   function drawWheel(wx, wy) {
     c.save(); c.translate(wx, wy);
@@ -471,82 +553,117 @@ function drawBicycle(c, x, y, s = 1, o = {}) {
     c.restore();
   }
 
-  // Draw wheels & fenders
+  const drawTube = (x1, y1, x2, y2, w = 7) => {
+    c.lineCap = 'round';
+    c.strokeStyle = INK_OUTLINE; c.lineWidth = w + 4.4; c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke();
+    c.strokeStyle = frameCol; c.lineWidth = w; c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke();
+  };
+
+  const drawCrankPedal = (px, py, isBack) => {
+    c.lineCap = 'round';
+    c.strokeStyle = INK_OUTLINE; c.lineWidth = 5;
+    c.beginPath(); c.moveTo(crankX, crankY); c.lineTo(px, py); c.stroke();
+    c.strokeStyle = isBack ? '#6B7280' : '#9CA3AF'; c.lineWidth = 2.5;
+    c.beginPath(); c.moveTo(crankX, crankY); c.lineTo(px, py); c.stroke();
+    inkrr(c, px - 8, py - 3, 16, 6, 2, isBack ? '#27272A' : '#18181B', 1.8);
+  };
+
+  // Layer 1: Wheels, fenders & rear rack
   drawWheel(rearX, wheelY);
   drawWheel(frontX, wheelY);
   c.strokeStyle = frameCol; c.lineWidth = 5; c.lineCap = 'round';
   c.beginPath(); c.arc(rearX, wheelY, wheelR + 7, -0.85 * Math.PI, -0.15 * Math.PI); c.stroke();
   c.beginPath(); c.arc(frontX, wheelY, wheelR + 7, -0.78 * Math.PI, 0.08 * Math.PI); c.stroke();
-
-  // Rear rack
   c.strokeStyle = '#52525B'; c.lineWidth = 3.5;
   c.beginPath(); c.moveTo(rearX - 18, wheelY - 52); c.lineTo(rearX + 30, wheelY - 52); c.lineTo(rearX, wheelY); c.stroke();
 
-  // Frame diamond + fork
-  const crankX = -8, crankY = -38;
-  const seatX = -32, seatY = -102;
-  const headX = 48, headY = -108;
+  // Resolve rider rig parameters (shared CAST presets)
+  const hasRider = o.rider !== false;
+  const charPreset = typeof o.cast === 'string' && CAST[o.cast] ? CAST[o.cast] : PROTAGONIST;
+  const K = { ...PROTAGONIST, ...charPreset, ...(o.colors || {}) };
+  const thin = o.thin ? 0.88 : 1;
+  const by = Math.sin(spin * 2) * 1.2;
+  const lean = 0.12;
+  const hipX = seatX + 4, hipY = seatY - 5 + by;
+  const rotHip = (dx, dy) => [
+    hipX + dx * Math.cos(lean) - dy * Math.sin(lean),
+    hipY + dx * Math.sin(lean) + dy * Math.cos(lean)
+  ];
+  const [sxFar, syFar] = rotHip(-4.2 * thin, -53);
+  const [sxNear, syNear] = rotHip(-1 * thin, -54);
 
-  const drawTube = (x1, y1, x2, y2, w = 7) => {
-    c.strokeStyle = INK_OUTLINE; c.lineWidth = w + 4.4; c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke();
-    c.strokeStyle = frameCol; c.lineWidth = w; c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke();
-  };
-  // Chainstay & seatstay
+  // Layer 2: Far crank/pedal + Rider far leg & far handlebar/far arm (behind bike frame!)
+  drawCrankPedal(pFarX, pFarY, true);
+  if (hasRider) {
+    const farHipX = hipX - 2, farHipY = hipY + 3;
+    const farAx = pFarX - 5, farAy = pFarY - 10;
+    const [fkx, fky] = solveIK2(farHipX, farHipY, farAx, farAy, 45, 45, -1);
+    drawJointedLeg(c, farHipX, farHipY, fkx, fky, farAx, farAy, K, thin, true, -0.06 * Math.sin(spin + Math.PI));
+  }
+  // Far handlebar bar + far grip behind headtube/basket
+  c.lineCap = 'round';
+  c.strokeStyle = INK_OUTLINE; c.lineWidth = 8.5;
+  c.beginPath(); c.moveTo(stemX, stemY); c.quadraticCurveTo(37, -135, farGripX, farGripY); c.stroke();
+  c.strokeStyle = '#9CA3AF'; c.lineWidth = 4.5;
+  c.beginPath(); c.moveTo(stemX, stemY); c.quadraticCurveTo(37, -135, farGripX, farGripY); c.stroke();
+  inkrr(c, farGripX - 7, farGripY - 4, 14, 8, 4, '#18181B', 2);
+  if (hasRider) {
+    const [fex, fey] = solveIK2(sxFar, syFar, farGripX, farGripY, 33, 33, 1);
+    drawJointedArm(c, sxFar, syFar, fex, fey, farGripX, farGripY, K, mix(K.shirt, '#000000', 0.1), thin, true);
+  }
+
+  // Layer 3: Frame diamond, fork, stem, chainring, saddle & front basket
   drawTube(rearX, wheelY, crankX, crankY, 5.5);
   drawTube(rearX, wheelY, seatX, seatY + 8, 5);
-  // Seat tube, down tube, top tube
   drawTube(crankX, crankY, seatX, seatY, 7);
   drawTube(crankX, crankY, headX, headY + 12, 7.5);
   drawTube(seatX, seatY + 8, headX, headY + 10, 6.5);
-  // Front fork + stem
   drawTube(headX, headY + 8, frontX, wheelY, 6.5);
-  drawTube(headX, headY + 8, headX - 6, headY - 22, 6);
+  drawTube(headX, headY + 8, stemX, stemY, 6);
 
-  // Saddle
-  inkrr(c, seatX - 18, seatY - 9, 34, 11, 5, '#27272A', 2.5);
-
-  // Crankset / Chainring
+  // Saddle & Crankset Chainring
+  inkrr(c, seatX - 18, seatY - 7, 34, 10, 5, '#27272A', 2.5);
   c.fillStyle = '#3F3F46'; c.strokeStyle = INK_OUTLINE; c.lineWidth = 2.5;
   c.beginPath(); c.arc(crankX, crankY, 13, 0, TAU); c.fill(); c.stroke();
 
-  // Front wire mesh basket (exact signature prop from reference image!)
-  const bx = headX + 8, by = headY - 12, bw = 42, bh = 32;
-  c.fillStyle = 'rgba(212,212,216,0.28)';
-  inkrr(c, bx, by, bw, bh, 4, 'rgba(24,24,27,0.12)', 2.8);
+  // Front wire mesh basket
+  drawTube(headX + 2, headY + 4, headX + 10, headY - 1, 3.5);
+  const bx = headX + 8, basketY = headY - 8, bw = 38, bh = 28;
+  inkrr(c, bx, basketY, bw, bh, 4, 'rgba(212,212,216,0.22)', 2.8);
   c.strokeStyle = '#3F3F46'; c.lineWidth = 1.6;
-  for (let gx = bx + 7; gx < bx + bw; gx += 7) { c.beginPath(); c.moveTo(gx, by); c.lineTo(gx, by + bh); c.stroke(); }
-  for (let gy = by + 8; gy < by + bh; gy += 8) { c.beginPath(); c.moveTo(bx, gy); c.lineTo(bx + bw, gy); c.stroke(); }
+  for (let gx = bx + 7; gx < bx + bw; gx += 7) { c.beginPath(); c.moveTo(gx, basketY); c.lineTo(gx, basketY + bh); c.stroke(); }
+  for (let gy = basketY + 7; gy < basketY + bh; gy += 7) { c.beginPath(); c.moveTo(bx, gy); c.lineTo(bx + bw, gy); c.stroke(); }
 
-  // Rider (if not disabled)
-  if (o.rider !== false) {
-    const riderPose = poseBike(t, speed);
-    drawSitcomPerson(c, seatX + 10, -14, 1.0, {
-      t,
-      cast: o.cast || 'ton',
-      colors: o.colors,
-      expr: o.expr || 'chill',
-      talking: o.talking,
-      pose: riderPose,
-      shadow: false
-    });
+  // Layer 4: Near crank arm + center crank bolt + near pedal
+  drawCrankPedal(pNearX, pNearY, false);
+  c.fillStyle = '#D4D4D8'; c.strokeStyle = INK_OUTLINE; c.lineWidth = 1.6;
+  c.beginPath(); c.arc(crankX, crankY, 3.2, 0, TAU); c.fill(); c.stroke();
+
+  // Layer 5 & 6: Rider near leg (straddling over frame & planted on near pedal) -> Rider torso & head on saddle
+  if (hasRider) {
+    const nearHipX = hipX + 2, nearHipY = hipY + 4;
+    const nearAx = pNearX - 5, nearAy = pNearY - 10;
+    const [nkx, nky] = solveIK2(nearHipX, nearHipY, nearAx, nearAy, 45, 45, -1);
+    drawJointedLeg(c, nearHipX, nearHipY, nkx, nky, nearAx, nearAy, K, thin, false, -0.06 * Math.sin(spin));
+
+    c.save();
+    c.translate(hipX, hipY); c.rotate(lean); c.translate(0, 92 - by);
+    drawSitcomUpperBody(c, K, o, { by, lean, tilt: -lean * 0.55, seatedBridge: true }, thin);
+    c.restore();
   }
 
-  // Rotating crank arm & pedal (synced with pedaling cycle)
-  const pedX = crankX + Math.cos(spin) * 18, pedY = crankY + Math.sin(spin) * 18;
-  c.strokeStyle = INK_OUTLINE; c.lineWidth = 5; c.lineCap = 'round';
-  c.beginPath(); c.moveTo(crankX, crankY); c.lineTo(pedX, pedY); c.stroke();
-  c.strokeStyle = '#9CA3AF'; c.lineWidth = 2.5;
-  c.beginPath(); c.moveTo(crankX, crankY); c.lineTo(pedX, pedY); c.stroke();
-  inkrr(c, pedX - 8, pedY - 3, 16, 6, 2, '#18181B', 1.8);
-
-  // Handlebars & grips (drawn on top so hands align cleanly)
+  // Layer 7: Near swept-back handlebar, grip & near arm grasping grip
+  c.lineCap = 'round';
   c.strokeStyle = INK_OUTLINE; c.lineWidth = 9;
-  c.beginPath(); c.moveTo(headX - 24, headY - 22); c.quadraticCurveTo(headX - 6, headY - 26, headX + 10, headY - 20); c.stroke();
+  c.beginPath(); c.moveTo(stemX, stemY); c.quadraticCurveTo(28, -131, nearGripX, nearGripY); c.stroke();
   c.strokeStyle = '#D4D4D8'; c.lineWidth = 5;
-  c.beginPath(); c.moveTo(headX - 24, headY - 22); c.quadraticCurveTo(headX - 6, headY - 26, headX + 10, headY - 20); c.stroke();
-  // Black grip handles
-  inkrr(c, headX - 30, headY - 26, 14, 8, 4, '#18181B', 2);
-  inkrr(c, headX + 4, headY - 24, 14, 8, 4, '#18181B', 2);
+  c.beginPath(); c.moveTo(stemX, stemY); c.quadraticCurveTo(28, -131, nearGripX, nearGripY); c.stroke();
+  inkrr(c, nearGripX - 8, nearGripY - 4, 15, 8, 4, '#18181B', 2);
+
+  if (hasRider) {
+    const [nex, ney] = solveIK2(sxNear, syNear, nearGripX, nearGripY, 33, 33, 1);
+    drawJointedArm(c, sxNear, syNear, nex, ney, nearGripX, nearGripY, K, K.shirt, thin, false);
+  }
 
   c.restore();
 }
