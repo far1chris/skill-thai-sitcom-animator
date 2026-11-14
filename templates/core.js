@@ -1,0 +1,1180 @@
+// =============================================================================
+//  Thai Adult Sitcom & Everyday Social Comedy 2.5D Core Engine
+//  Part of skill: thai-sitcom-animator
+//  Visual Style: Clean dark ink outlines (#18181B), flat warm colors + 1-step cel shade,
+//  signature half-lidded sitcom eyes, recurring CAST roster, bicycle & everyday props,
+//  and Thai social media / comedy HUD cards.
+//  Human Proportion Ratio 1:6.5 (Athletic / casual build with continuous trapezius slope)
+// =============================================================================
+const W = 1280, H = 720, TAU = Math.PI * 2;
+const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, k) => a + (b - a) * k;
+const ease = k => (k = clamp(k), k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2);
+const easeOut = k => 1 - Math.pow(1 - clamp(k), 3);
+const easeBack = k => { k = clamp(k); const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(k - 1, 3) + c1 * Math.pow(k - 1, 2); };
+const hash = n => { const s = Math.sin(n * 127.1 + 311.7) * 43758.5453; return s - Math.floor(s); };
+const prog = (t, a, b) => clamp((t - a) / (b - a));
+const FONT = "'Kanit','Leelawadee UI','Tahoma',sans-serif";
+const F_MONO = "'JetBrains Mono','Kanit',monospace";
+const INK_OUTLINE = '#18181B';
+
+function hex2rgb(h) { h = h.replace('#', ''); return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]; }
+function mix(a, b, k) { const A = hex2rgb(a), B = hex2rgb(b); return `rgb(${A.map((v, i) => Math.round(lerp(v, B[i], clamp(k)))).join(',')})`; }
+function rgba(h, a) { const A = hex2rgb(h); return `rgba(${A[0]},${A[1]},${A[2]},${a})`; }
+
+function rr(c, x, y, w, h, r) { c.beginPath(); c.roundRect(x, y, w, h, r); }
+function inkrr(c, x, y, w, h, r, fillCol, strokeW = 2.6, strokeCol = INK_OUTLINE) {
+  rr(c, x, y, w, h, r);
+  if (fillCol) { c.fillStyle = fillCol; c.fill(); }
+  if (strokeW > 0) { c.strokeStyle = strokeCol; c.lineWidth = strokeW; c.lineJoin = 'round'; c.stroke(); }
+}
+function cyl(c, x, w, base, hi, sh) {
+  const g = c.createLinearGradient(x, 0, x + w, 0);
+  g.addColorStop(0, base); g.addColorStop(0.35, hi || base); g.addColorStop(1, sh || base); return g;
+}
+function limb(c, x1, y1, x2, y2, w, col, sh, outlineW = 2.6) {
+  c.lineCap = 'round';
+  if (outlineW > 0) {
+    c.strokeStyle = INK_OUTLINE; c.lineWidth = w + outlineW * 2;
+    c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke();
+  }
+  c.strokeStyle = col; c.lineWidth = w; c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke();
+  if (sh) {
+    const dx = x2 - x1, dy = y2 - y1, L = Math.hypot(dx, dy) || 1, nx = -dy / L * w * 0.26, ny = dx / L * w * 0.26;
+    c.strokeStyle = sh; c.lineWidth = w * 0.34; c.beginPath(); c.moveTo(x1 + nx, y1 + ny); c.lineTo(x2 + nx, y2 + ny); c.stroke();
+  }
+}
+function txt(c, s, x, y, size, col, weight = 700, align = 'left', base = 'alphabetic') {
+  c.font = `${weight} ${size}px ${FONT}`; c.fillStyle = col; c.textAlign = align; c.textBaseline = base; c.fillText(s, x, y);
+}
+function glow(c, x, y, r, col, a) {
+  const g = c.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, rgba(col, a)); g.addColorStop(1, rgba(col, 0));
+  c.fillStyle = g; c.fillRect(x - r, y - r, r * 2, r * 2);
+}
+
+// Offscreen Gaussian blur buffer (depth-of-field & HUD rack-focus)
+const _tmp = typeof document !== 'undefined' ? document.createElement('canvas') : null;
+if (_tmp) { _tmp.width = W; _tmp.height = H; }
+const _tc = _tmp ? _tmp.getContext('2d') : null;
+function blurLayer(c, px, fn, extra = '') {
+  if (!_tc) { fn(c); return; }
+  _tc.setTransform(1, 0, 0, 1, 0, 0); _tc.clearRect(0, 0, W, H); fn(_tc);
+  c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.filter = `blur(${px}px) ${extra}`; c.drawImage(_tmp, 0, 0); c.restore();
+}
+function flick(i, t, rate = 1) {
+  const a = hash(i * 13.1 + Math.floor(t * 14 * rate));
+  const bad = hash(i * 7.7) > 0.78;
+  return bad ? (a > 0.55 ? 1 : a > 0.3 ? 0.35 : 0.08) : (a > 0.985 ? 0.4 : 1);
+}
+
+// ----------------------------------------------------------------- POSES (2-Segment FK)
+function poseWalk(t, speed = 1.6, amp = 0.42) {
+  const p = t * TAU * speed * 0.5;
+  return {
+    by: -Math.abs(Math.sin(p)) * 3, lean: 0.03,
+    legs: [
+      { a: amp * Math.sin(p), b: Math.max(0, -Math.sin(p + 0.9)) * 0.7 },
+      { a: -amp * Math.sin(p), b: Math.max(0, Math.sin(p + 0.9)) * 0.7 }
+    ],
+    arms: [
+      { a: -amp * 0.8 * Math.sin(p), b: 0.25 },
+      { a: amp * 0.8 * Math.sin(p), b: 0.25 }
+    ],
+    tilt: 0
+  };
+}
+function poseStand(t, o = {}) {
+  const br = Math.sin(t * 2.2) * 1.2;
+  return {
+    by: br * 0.4, lean: o.lean || 0,
+    legs: o.legs || [{ a: 0.05, b: 0 }, { a: -0.05, b: 0 }],
+    arms: o.arms || [{ a: 0.08, b: 0.1 }, { a: -0.08, b: 0.1 }],
+    tilt: o.tilt || 0
+  };
+}
+function poseKneel(t, o = {}) {
+  return {
+    by: 37, lean: 0.35,
+    legs: [{ a: 1.4, b: 1.4 }, { a: 0.1, b: 1.6 }],
+    arms: o.arms || [{ a: 1.2, b: -0.3 }, { a: 0.9, b: -0.2 }],
+    tilt: o.tilt || 0.2
+  };
+}
+function poseSit(t, o = {}) {
+  return {
+    by: 60, lean: o.lean !== undefined ? o.lean : -0.05,
+    legs: o.legs || [{ a: 1.25, b: 2.1 }, { a: 1.15, b: 2.0 }],
+    arms: o.arms || [{ a: 0.9, b: 0.9 }, { a: 0.8, b: 1.0 }],
+    tilt: o.tilt || 0
+  };
+}
+function poseBike(t, speed = 1.6) {
+  const p = t * TAU * speed;
+  return {
+    by: Math.sin(p * 2) * 1.6, lean: 0.16,
+    legs: [
+      { a: 0.78 + 0.36 * Math.sin(p), b: Math.max(0.2, 0.88 + 0.42 * Math.cos(p)) },
+      { a: 0.78 - 0.36 * Math.sin(p), b: Math.max(0.2, 0.88 - 0.42 * Math.cos(p)) }
+    ],
+    arms: [
+      { a: 0.72, b: 0.36 },
+      { a: 0.68, b: 0.38 }
+    ],
+    tilt: -0.06
+  };
+}
+
+// --------------------------------------------------------- RECURRING SITCOM CAST ROSTER (1:6.5 Ratio)
+const PROTAGONIST = {
+  name: 'ต้น',
+  skin: '#E6AF82', skinHi: '#F0C097', skinSh: '#C98E60',
+  shirt: '#F3EDE0', shirtHi: '#FAF6EE', shirtSh: '#DED5C3',
+  pants: '#4B79A1', pantsSh: '#385E80', cuff: '#7BA3C7',
+  shoe: '#F5F2EB', shoeSole: '#D6CFC2',
+  hair: '#3A2618', hairStyle: 'messy',
+  eyelid: 0.42
+};
+const TON = PROTAGONIST;
+
+const CAST = {
+  ton: PROTAGONIST,
+  fah: {
+    name: 'ฟ้า',
+    skin: '#ECC09B', skinHi: '#F5CFAF', skinSh: '#CFA07A',
+    shirt: '#FDE68A', shirtHi: '#FEF3C7', shirtSh: '#F59E0B',
+    pants: '#334155', pantsSh: '#1E293B', cuff: '#475569',
+    shoe: '#FAF6EE', shoeSole: '#CBD5E1',
+    hair: '#271911', hairStyle: 'bob',
+    eyelid: 0.34
+  },
+  boss: {
+    name: 'พี่บอส',
+    skin: '#DDA172', skinHi: '#E8B48B', skinSh: '#BA7E50',
+    shirt: '#DBEAFE', shirtHi: '#EFF6FF', shirtSh: '#93C5FD',
+    pants: '#1E293B', pantsSh: '#0F172A', cuff: '#334155',
+    shoe: '#27272A', shoeSole: '#18181B',
+    hair: '#1F1B18', hairStyle: 'parted',
+    tie: '#DC2626', glasses: true,
+    eyelid: 0.48
+  },
+  barista: {
+    name: 'บาริสต้าเจ',
+    skin: '#E6AF82', skinHi: '#F0C097', skinSh: '#C98E60',
+    shirt: '#FFFFFF', shirtHi: '#F8FAFC', shirtSh: '#E2E8F0',
+    apron: '#2E5A44',
+    pants: '#27272A', pantsSh: '#18181B', cuff: '#3F3F46',
+    shoe: '#F5F2EB', shoeSole: '#D6CFC2',
+    hair: '#2A1D15', hairStyle: 'beanie', beanieCol: '#B45309',
+    eyelid: 0.45
+  },
+  rider: {
+    name: 'พี่วิน',
+    skin: '#D08B5B', skinHi: '#DF9E70', skinSh: '#AD6D40',
+    shirt: '#22C55E', shirtHi: '#4ADE80', shirtSh: '#15803D',
+    pants: '#3B6998', pantsSh: '#2B4C6F', cuff: '#6088B0',
+    shoe: '#F5F2EB', shoeSole: '#D6CFC2',
+    hair: '#1C1917', hairStyle: 'messy',
+    eyelid: 0.38
+  }
+};
+
+// Semantic prop helpers
+function drawIcedCoffeeCup(c, x, y, s = 1) {
+  c.save(); c.translate(x, y); c.scale(s, s);
+  // Green straw
+  c.strokeStyle = '#15803D'; c.lineWidth = 4; c.lineCap = 'round';
+  c.beginPath(); c.moveTo(0, -14); c.lineTo(5, -34); c.stroke();
+  // Clear cup + iced coffee + cardboard sleeve
+  inkrr(c, -10, -16, 20, 28, 4, '#D97706', 2.4);
+  inkrr(c, -11, -8, 22, 11, 2, '#C89D66', 2.2);
+  // Dome lid
+  c.fillStyle = 'rgba(255,255,255,0.78)'; c.strokeStyle = INK_OUTLINE; c.lineWidth = 2.2;
+  c.beginPath(); c.arc(0, -16, 10, Math.PI, 0); c.closePath(); c.fill(); c.stroke();
+  c.restore();
+}
+
+function drawSmartphoneProp(c, x, y, s = 1, glowScreen = true) {
+  c.save(); c.translate(x, y); c.scale(s, s);
+  if (glowScreen) glow(c, 4, -8, 28, '#38BDF8', 0.35);
+  inkrr(c, -8, -18, 16, 28, 4, '#1E293B', 2.4);
+  c.fillStyle = '#38BDF8'; rr(c, -5, -14, 10, 20, 2); c.fill();
+  c.restore();
+}
+
+function drawSitcomPerson(c, x, y, s, o = {}) {
+  const charPreset = typeof o.cast === 'string' && CAST[o.cast] ? CAST[o.cast] : PROTAGONIST;
+  const P = o.pose || poseStand(o.t || 0), K = { ...PROTAGONIST, ...charPreset, ...(o.colors || {}) };
+  const thin = o.thin ? 0.88 : 1;
+  const shiverX = o.shiver ? Math.sin((o.t || 0) * 42) * 1.6 : 0;
+  c.save(); c.translate(x + shiverX, y); c.scale(s * (o.dir || 1), s);
+  if (o.shadow !== false) { c.fillStyle = 'rgba(24,24,27,0.22)'; c.beginPath(); c.ellipse(0, 0, 36, 7, 0, 0, TAU); c.fill(); }
+  const by = P.by || 0, hipY = -92 + by, torsoH = 64;
+
+  const leg = (hx, L, col, sh, isBack = false) => {
+    const kx = hx + 45 * Math.sin(L.a), ky = hipY + 45 * Math.cos(L.a);
+    const sa = L.a - L.b, ax = kx + 45 * Math.sin(sa), ay = ky + 45 * Math.cos(sa);
+    limb(c, hx, hipY, kx, ky, 16.5 * thin, col, sh, 2.6);
+    limb(c, kx, ky, ax, ay, 14.5 * thin, col, sh, 2.6);
+    // Rolled denim cuff at ankle (matching reference image!)
+    c.save(); c.translate(ax, ay - 6); c.rotate(sa * 0.35);
+    inkrr(c, -9, -4, 18, 8, 3, K.cuff || '#7BA3C7', 2.2);
+    c.restore();
+    // Clean white sneaker with sole & laces
+    c.save(); c.translate(ax, ay);
+    inkrr(c, -8, -4, 26, 11, 5, isBack ? mix(K.shoe, '#000000', 0.12) : K.shoe, 2.5);
+    c.fillStyle = K.shoeSole || '#D6CFC2'; c.fillRect(-7, 4, 24, 3);
+    c.strokeStyle = INK_OUTLINE; c.lineWidth = 1.8;
+    c.beginPath(); c.moveTo(4, -3); c.lineTo(7, -1); c.moveTo(9, -3); c.lineTo(12, -1); c.stroke();
+    c.restore();
+  };
+
+  c.save(); c.rotate(P.lean || 0);
+  const sh = (i) => [14 * thin * (i ? -1 : 1) * 0.3, -144 + by];
+  const arm = (i, A, col) => {
+    const [sx, sy] = sh(i);
+    const ex = sx + 32 * Math.sin(A.a), ey = sy + 32 * Math.cos(A.a);
+    const fa = A.a + A.b, wx = ex + 30 * Math.sin(fa), wy = ey + 30 * Math.cos(fa);
+    // Upper sleeve (button-down shirt)
+    limb(c, sx, sy, ex, ey, 14 * thin, col, K.shirtSh, 2.6);
+    // Forearm skin
+    limb(c, ex, ey, wx, wy, 11 * thin, K.skin, K.skinSh, 2.5);
+    // Rolled-up sleeve cuff at elbow (signature detail from reference image!)
+    c.save(); c.translate(ex, ey); c.rotate(A.a);
+    inkrr(c, -8.5 * thin, -5, 17 * thin, 9, 4, col, 2.3);
+    c.restore();
+    // Hand with ink outline
+    c.fillStyle = K.skin; c.strokeStyle = INK_OUTLINE; c.lineWidth = 2.4;
+    c.beginPath(); c.arc(wx, wy, 6.8, 0, TAU); c.fill(); c.stroke();
+    return [wx, wy];
+  };
+  c.restore();
+
+  // Back limbs
+  leg(-6, P.legs[1], mix(K.pants, '#000000', 0.18), null, true);
+  c.save(); c.rotate(P.lean || 0); arm(1, P.arms[1], mix(K.shirt, '#000000', 0.1)); c.restore();
+
+  // Torso (with continuous trapezius slope & button-up shirt details)
+  c.save(); c.rotate(P.lean || 0);
+  inkrr(c, -22 * thin, -152 + by, 44 * thin, torsoH, 12, cyl(c, -22 * thin, 44 * thin, K.shirt, K.shirtHi, K.shirtSh), 2.7);
+  // Café apron if barista
+  if (K.apron || o.apron) {
+    inkrr(c, -18 * thin, -138 + by, 36 * thin, 48, 6, K.apron || '#2E5A44', 2.4);
+  }
+  // Waistband + belt
+  inkrr(c, -21 * thin, -98 + by, 42 * thin, 14, 5, K.pants, 2.6);
+  c.fillStyle = '#27272A'; c.fillRect(-20 * thin, -99 + by, 40 * thin, 5);
+  // Neck & Shirt Collar + Placket Buttons
+  inkrr(c, -6.5, -163 + by, 13, 15, 4, K.skin, 2.4);
+  // Collar flaps
+  c.fillStyle = K.shirtHi || K.shirt; c.strokeStyle = INK_OUTLINE; c.lineWidth = 2.2;
+  c.beginPath(); c.moveTo(-7, -153 + by); c.lineTo(-14, -141 + by); c.lineTo(-2, -143 + by); c.closePath(); c.fill(); c.stroke();
+  c.beginPath(); c.moveTo(7, -153 + by); c.lineTo(14, -141 + by); c.lineTo(2, -143 + by); c.closePath(); c.fill(); c.stroke();
+  // Vertical placket line & buttons
+  c.beginPath(); c.moveTo(2, -143 + by); c.lineTo(2, -99 + by); c.stroke();
+  if (K.tie) {
+    c.fillStyle = K.tie; c.beginPath(); c.moveTo(0, -143 + by); c.lineTo(-5, -112 + by); c.lineTo(0, -104 + by); c.lineTo(5, -112 + by); c.closePath(); c.fill(); c.stroke();
+  } else {
+    c.fillStyle = INK_OUTLINE;
+    for (const byBtn of [-132, -120, -108]) { c.beginPath(); c.arc(5, byBtn + by, 1.6, 0, TAU); c.fill(); }
+  }
+
+  // Head (Adult Cartoon Sitcom Style — half-lidded oval eyes, C-ear, expressive brows)
+  c.save(); c.translate(0, -192 + by); c.rotate(P.tilt || 0);
+  // C-shaped Ear on back side of head
+  inkrr(c, -31, -8, 12, 16, 6, K.skin, 2.4);
+  c.strokeStyle = INK_OUTLINE; c.lineWidth = 1.8;
+  c.beginPath(); c.arc(-26, 0, 3.2, 0.4 * Math.PI, 1.5 * Math.PI); c.stroke();
+
+  // Head contour
+  inkrr(c, -25, -34, 50, 64, 21, cyl(c, -25, 50, K.skin, K.skinHi, K.skinSh), 2.7);
+
+  // Hair styles
+  c.fillStyle = K.hair; c.strokeStyle = INK_OUTLINE; c.lineWidth = 2.6; c.lineJoin = 'round';
+  if (o.back) {
+    inkrr(c, -27, -37, 54, 54, [22, 22, 14, 14], K.hair, 2.6);
+  } else {
+    if (K.hairStyle === 'bob') {
+      c.beginPath();
+      c.moveTo(-27, 14); c.lineTo(-29, -18);
+      c.quadraticCurveTo(-26, -42, 0, -41);
+      c.quadraticCurveTo(27, -41, 28, -14);
+      c.lineTo(26, 12); c.lineTo(20, -16); c.lineTo(-18, -18); c.closePath();
+      c.fill(); c.stroke();
+    } else if (K.hairStyle === 'beanie') {
+      inkrr(c, -27, -42, 54, 24, [20, 20, 5, 5], K.beanieCol || '#B45309', 2.6);
+      inkrr(c, -28, -24, 56, 8, 4, mix(K.beanieCol || '#B45309', '#000000', 0.2), 2.4);
+    } else {
+      // Tousled messy sitcom hair with spiky tufts (exact match to reference image!)
+      c.beginPath();
+      c.moveTo(-25, -6);
+      c.lineTo(-28, -22);
+      c.lineTo(-22, -33);
+      c.lineTo(-26, -38);
+      c.lineTo(-14, -39);
+      c.lineTo(-10, -44);
+      c.lineTo(2, -40);
+      c.lineTo(14, -43);
+      c.lineTo(18, -37);
+      c.lineTo(27, -33);
+      c.lineTo(26, -15);
+      c.lineTo(21, -12);
+      c.lineTo(16, -21);
+      c.lineTo(8, -16);
+      c.lineTo(2, -22);
+      c.lineTo(-6, -16);
+      c.lineTo(-14, -22);
+      c.lineTo(-19, -14);
+      c.closePath();
+      c.fill(); c.stroke();
+    }
+
+    const fx = o.profile ? 8 : 4, ex = o.expr || 'chill';
+    const blink = o.t != null && (o.t % 3.8) < 0.11;
+
+    // Signature Adult Sitcom Oval Eyes + Half-Lidded Upper Eyelids
+    const eyePositions = [-8 + fx, 10 + fx];
+    const lidRatio = ex === 'shock' ? 0.08 : ex === 'deadpan' || ex === 'annoyed' ? 0.54 : ex === 'happy' ? 0.22 : (K.eyelid || 0.42);
+    const pupilShiftX = ex === 'side_eye' ? -3.2 : (o.lookX || 1.2);
+    const pupilShiftY = o.lookY || 0.5;
+
+    for (const exPos of eyePositions) {
+      if (blink || ex === 'sigh') {
+        c.strokeStyle = INK_OUTLINE; c.lineWidth = 2.6;
+        c.beginPath(); c.moveTo(exPos - 6, -4); c.quadraticCurveTo(exPos, -1, exPos + 6, -4); c.stroke();
+        continue;
+      }
+      // White sclera oval
+      c.save();
+      c.beginPath(); c.ellipse(exPos, -4, 7.2, 6.2, 0, 0, TAU);
+      c.fillStyle = '#FFFFFF'; c.fill();
+      c.clip();
+      // Pupil
+      const pr = ex === 'shock' ? 2.1 : 2.5;
+      c.fillStyle = INK_OUTLINE;
+      c.beginPath(); c.arc(exPos + pupilShiftX, -3.5 + pupilShiftY, pr, 0, TAU); c.fill();
+      // Half-lidded upper eyelid (skin tone with dark bottom line)
+      if (lidRatio > 0.1) {
+        const lidY = -10.2 + lidRatio * 12.4;
+        c.fillStyle = K.skin;
+        c.fillRect(exPos - 9, -12, 18, lidY + 12);
+        c.strokeStyle = INK_OUTLINE; c.lineWidth = 2.2;
+        c.beginPath(); c.moveTo(exPos - 8, lidY); c.lineTo(exPos + 8, lidY); c.stroke();
+      }
+      c.restore();
+      // Outer eye ink ring
+      c.strokeStyle = INK_OUTLINE; c.lineWidth = 2.3;
+      c.beginPath(); c.ellipse(exPos, -4, 7.2, 6.2, 0, 0, TAU); c.stroke();
+
+      if (K.glasses || o.glasses) {
+        c.strokeStyle = '#1E293B'; c.lineWidth = 2.2;
+        rr(c, exPos - 9, -11, 18, 14, 3); c.stroke();
+      }
+    }
+
+    // Thick Expressive Eyebrows
+    c.strokeStyle = K.hair; c.lineWidth = 3.4; c.lineCap = 'round';
+    const browLift = ex === 'shock' ? -4 : ex === 'annoyed' ? 2.5 : 0;
+    const rightTilt = ex === 'smirk' || ex === 'awkward' ? -2.5 : browLift;
+    c.beginPath(); c.moveTo(-15 + fx, -14 + browLift * 0.5); c.lineTo(-3 + fx, -14 + browLift); c.stroke();
+    c.beginPath(); c.moveTo(4 + fx, -14 + rightTilt); c.lineTo(17 + fx, -13 + rightTilt * 0.4); c.stroke();
+
+    // Nose (clean cartoon L/C curve)
+    c.strokeStyle = INK_OUTLINE; c.lineWidth = 2.3;
+    c.beginPath(); c.moveTo(fx + 1, -2); c.quadraticCurveTo(fx + 6.5, 4, fx + 1, 7); c.stroke();
+
+    // Mouth (supports lip-sync talking + comedic expressions)
+    const isTalking = o.talking && Math.sin((o.t || 0) * 26) > 0.1;
+    if (isTalking) {
+      c.fillStyle = '#7F1D1D'; c.strokeStyle = INK_OUTLINE; c.lineWidth = 2.2;
+      c.beginPath(); c.ellipse(fx + 1, 15, 5.5, 4.2, 0, 0, TAU); c.fill(); c.stroke();
+      c.fillStyle = '#FFFFFF'; c.fillRect(fx - 3, 11.5, 8, 2.2);
+    } else if (ex === 'shock') {
+      c.fillStyle = '#7F1D1D'; c.strokeStyle = INK_OUTLINE; c.lineWidth = 2.3;
+      c.beginPath(); c.ellipse(fx + 1, 16, 5, 6.5, 0, 0, TAU); c.fill(); c.stroke();
+    } else if (ex === 'awkward') {
+      inkrr(c, fx - 7, 13, 15, 6, 3, '#FFFFFF', 2.1);
+      c.beginPath(); c.moveTo(fx - 7, 16); c.lineTo(fx + 8, 16); c.stroke();
+    } else if (ex === 'deadpan' || ex === 'annoyed') {
+      c.beginPath(); c.moveTo(fx - 6, 15.5); c.lineTo(fx + 7, 15.5); c.stroke();
+    } else {
+      // Chill / Smirk gentle smile (matching reference image!)
+      c.beginPath(); c.moveTo(fx - 6, 14.5); c.quadraticCurveTo(fx + 1, 18.2, fx + 8, 13.5); c.stroke();
+    }
+
+    // Comic sweat drop for awkward/panic moments
+    if (o.sweat || ex === 'awkward') {
+      c.fillStyle = '#38BDF8'; c.strokeStyle = INK_OUTLINE; c.lineWidth = 2;
+      const sy = -10 + ((o.t || 0) * 18 % 14);
+      c.beginPath(); c.moveTo(-21, sy - 6); c.quadraticCurveTo(-16, sy + 2, -21, sy + 5); c.quadraticCurveTo(-26, sy + 2, -21, sy - 6); c.fill(); c.stroke();
+    }
+  }
+  c.restore();
+  c.restore();
+
+  // Front limbs & Hand-Socket Props
+  leg(6, P.legs[0], K.pants, K.pantsSh, false);
+  c.save(); c.rotate(P.lean || 0);
+  const frontPose = o.coverMouth ? { a: 2.35, b: 1.05 } : o.phone ? { a: 0.72, b: 1.15 } : P.arms[0];
+  const front = arm(0, frontPose, K.shirt);
+  if (o.bag) {
+    inkrr(c, front[0] - 14, front[1] + 4, 28, 34, 6, '#F5EFE6', 2.4);
+    c.strokeStyle = INK_OUTLINE; c.lineWidth = 2.2;
+    c.beginPath(); c.arc(front[0], front[1] + 4, 7, Math.PI, 0); c.stroke();
+  }
+  if (o.coffee || o.milk) {
+    drawIcedCoffeeCup(c, front[0] + 6, front[1] - 2, 1);
+  }
+  if (o.phone) {
+    drawSmartphoneProp(c, front[0] + 8, front[1] - 6, 1, o.phoneGlow !== false);
+  }
+  c.restore();
+  c.restore();
+}
+const drawPerson = drawSitcomPerson;
+
+// --------------------------------------------------------- CITY COMMUTER BICYCLE + RIDER (From Reference Image!)
+function drawBicycle(c, x, y, s = 1, o = {}) {
+  const t = o.t || 0;
+  const speed = o.speed !== undefined ? o.speed : 1.6;
+  const spin = t * TAU * speed;
+  const dir = o.dir || 1;
+  const frameCol = o.frameCol || '#6E716A';
+
+  c.save(); c.translate(x, y); c.scale(s * dir, s);
+  // Ground shadow
+  c.fillStyle = 'rgba(24,24,27,0.24)';
+  c.beginPath(); c.ellipse(0, 4, 118, 12, 0, 0, TAU); c.fill();
+
+  const rearX = -68, frontX = 68, wheelY = -42, wheelR = 40;
+
+  function drawWheel(wx, wy) {
+    c.save(); c.translate(wx, wy);
+    // Spokes
+    c.strokeStyle = '#9CA3AF'; c.lineWidth = 1.6;
+    for (let i = 0; i < 8; i++) {
+      const a = spin + (i * Math.PI) / 4;
+      c.beginPath();
+      c.moveTo(Math.cos(a) * (-wheelR + 5), Math.sin(a) * (-wheelR + 5));
+      c.lineTo(Math.cos(a) * (wheelR - 5), Math.sin(a) * (wheelR - 5));
+      c.stroke();
+    }
+    // Inner metallic rim
+    c.strokeStyle = '#D4D4D8'; c.lineWidth = 4.5;
+    c.beginPath(); c.arc(0, 0, wheelR - 5, 0, TAU); c.stroke();
+    // Dark rubber tire with ink outline
+    c.strokeStyle = '#27272A'; c.lineWidth = 9;
+    c.beginPath(); c.arc(0, 0, wheelR, 0, TAU); c.stroke();
+    c.strokeStyle = INK_OUTLINE; c.lineWidth = 2.4;
+    c.beginPath(); c.arc(0, 0, wheelR + 4, 0, TAU); c.stroke();
+    // Hub
+    c.fillStyle = '#52525B'; c.beginPath(); c.arc(0, 0, 5.5, 0, TAU); c.fill(); c.stroke();
+    c.restore();
+  }
+
+  // Draw wheels & fenders
+  drawWheel(rearX, wheelY);
+  drawWheel(frontX, wheelY);
+  c.strokeStyle = frameCol; c.lineWidth = 5; c.lineCap = 'round';
+  c.beginPath(); c.arc(rearX, wheelY, wheelR + 7, -0.85 * Math.PI, -0.15 * Math.PI); c.stroke();
+  c.beginPath(); c.arc(frontX, wheelY, wheelR + 7, -0.78 * Math.PI, 0.08 * Math.PI); c.stroke();
+
+  // Rear rack
+  c.strokeStyle = '#52525B'; c.lineWidth = 3.5;
+  c.beginPath(); c.moveTo(rearX - 18, wheelY - 52); c.lineTo(rearX + 30, wheelY - 52); c.lineTo(rearX, wheelY); c.stroke();
+
+  // Frame diamond + fork
+  const crankX = -8, crankY = -38;
+  const seatX = -32, seatY = -102;
+  const headX = 48, headY = -108;
+
+  const drawTube = (x1, y1, x2, y2, w = 7) => {
+    c.strokeStyle = INK_OUTLINE; c.lineWidth = w + 4.4; c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke();
+    c.strokeStyle = frameCol; c.lineWidth = w; c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke();
+  };
+  // Chainstay & seatstay
+  drawTube(rearX, wheelY, crankX, crankY, 5.5);
+  drawTube(rearX, wheelY, seatX, seatY + 8, 5);
+  // Seat tube, down tube, top tube
+  drawTube(crankX, crankY, seatX, seatY, 7);
+  drawTube(crankX, crankY, headX, headY + 12, 7.5);
+  drawTube(seatX, seatY + 8, headX, headY + 10, 6.5);
+  // Front fork + stem
+  drawTube(headX, headY + 8, frontX, wheelY, 6.5);
+  drawTube(headX, headY + 8, headX - 6, headY - 22, 6);
+
+  // Saddle
+  inkrr(c, seatX - 18, seatY - 9, 34, 11, 5, '#27272A', 2.5);
+
+  // Crankset / Chainring
+  c.fillStyle = '#3F3F46'; c.strokeStyle = INK_OUTLINE; c.lineWidth = 2.5;
+  c.beginPath(); c.arc(crankX, crankY, 13, 0, TAU); c.fill(); c.stroke();
+
+  // Front wire mesh basket (exact signature prop from reference image!)
+  const bx = headX + 8, by = headY - 12, bw = 42, bh = 32;
+  c.fillStyle = 'rgba(212,212,216,0.28)';
+  inkrr(c, bx, by, bw, bh, 4, 'rgba(24,24,27,0.12)', 2.8);
+  c.strokeStyle = '#3F3F46'; c.lineWidth = 1.6;
+  for (let gx = bx + 7; gx < bx + bw; gx += 7) { c.beginPath(); c.moveTo(gx, by); c.lineTo(gx, by + bh); c.stroke(); }
+  for (let gy = by + 8; gy < by + bh; gy += 8) { c.beginPath(); c.moveTo(bx, gy); c.lineTo(bx + bw, gy); c.stroke(); }
+
+  // Rider (if not disabled)
+  if (o.rider !== false) {
+    const riderPose = poseBike(t, speed);
+    drawSitcomPerson(c, seatX + 10, -28, 1.0, {
+      t,
+      cast: o.cast || 'ton',
+      colors: o.colors,
+      expr: o.expr || 'chill',
+      talking: o.talking,
+      pose: riderPose,
+      shadow: false
+    });
+  }
+
+  // Handlebars & grips (drawn on top so hands align cleanly)
+  c.strokeStyle = INK_OUTLINE; c.lineWidth = 9;
+  c.beginPath(); c.moveTo(headX - 24, headY - 22); c.quadraticCurveTo(headX - 6, headY - 26, headX + 10, headY - 20); c.stroke();
+  c.strokeStyle = '#D4D4D8'; c.lineWidth = 5;
+  c.beginPath(); c.moveTo(headX - 24, headY - 22); c.quadraticCurveTo(headX - 6, headY - 26, headX + 10, headY - 20); c.stroke();
+  // Black grip handles
+  inkrr(c, headX - 30, headY - 26, 14, 8, 4, '#18181B', 2);
+  inkrr(c, headX + 4, headY - 24, 14, 8, 4, '#18181B', 2);
+
+  c.restore();
+}
+
+// --------------------------------------------------------- COMPATIBILITY ENTITY & POV HAND RIGS
+function drawEntity(c, x, y, s, o = {}) {
+  const t = o.t || 0, P = o.pose || poseWalk(t, 0.8, 0.22);
+  const suit = o.suit || (o.dark ? '#3F4652' : '#4B5563');
+  const suitHi = o.suitHi || (o.dark ? '#4D5562' : '#6B7280');
+  const suitSh = o.suitSh || (o.dark ? '#2A3039' : '#374151');
+  const skin = o.skin || '#E6AF82';
+
+  c.save(); c.translate(x, y); c.scale(s * (o.dir || 1), s * (o.tall || 1.04));
+  if (o.shadow !== false) { c.fillStyle = 'rgba(0,0,0,0.22)'; c.beginPath(); c.ellipse(0, 0, 38, 7, 0, 0, TAU); c.fill(); }
+  const by = P.by || 0, hipY = -96 + by;
+  const leg = (hx, L, col) => {
+    const kx = hx + 46 * Math.sin(L.a), ky = hipY + 46 * Math.cos(L.a), sa = L.a - L.b, ax = kx + 46 * Math.sin(sa), ay = ky + 46 * Math.cos(sa);
+    limb(c, hx, hipY, kx, ky, 17, col, suitSh); limb(c, kx, ky, ax, ay, 15, col, suitSh);
+    inkrr(c, ax - 8, ay - 7, 26, 11, 4, '#18181B', 2.4);
+  };
+  leg(-6, P.legs[1], suitSh);
+
+  // 1. Far arm (suitSh)
+  limb(c, 10, -158 + by, 20, -132, 13, suit, suitSh); limb(c, 20, -132, 22, -148, 11, skin);
+
+  // 2. Prop drawn BEFORE front arm (suitHi) so near palm/sleeve occludes shaft
+  const hasMop = o.prop === 'mop' || o.mop === true;
+  if (hasMop && o.mop !== false && o.prop !== 'none') {
+    const sw = Math.sin(t * 2.4) * 10;
+    c.strokeStyle = '#7A5B3A'; c.lineWidth = 5.5; c.lineCap = 'round';
+    c.beginPath(); c.moveTo(18, -150); c.lineTo(70 + sw, -4); c.stroke();
+    c.fillStyle = '#8F8F86'; for (let k = 0; k < 7; k++) { rr(c, 52 + sw + k * 5, -10, 4, 12 + (k % 2) * 3, 2); c.fill(); }
+  }
+
+  inkrr(c, -24, -168 + by, 48, 80, 12, cyl(c, -24, 48, suit, suitHi, suitSh), 2.6);
+  if (o.badge === true) { inkrr(c, 4, -150 + by, 14, 8, 2, '#FACC15', 2); }
+  leg(6, P.legs[0], suit);
+
+  // 3. Front arm (suitHi)
+  limb(c, -6, -158 + by, 4, -128, 13, suitHi, suitSh); limb(c, 4, -128, 18, -142, 11, skin);
+  inkrr(c, -5, -178 + by, 12, 14, 3, skin, 2.2);
+
+  // Head
+  c.save(); c.translate(0, -206 + by); c.rotate(o.tilt || 0);
+  inkrr(c, -25, -30, 50, 60, 22, cyl(c, -25, 50, o.headColor || skin, o.headHi || '#F0C097', o.headSh || '#C98E60'), 2.6);
+  if (o.cap === true) {
+    inkrr(c, -27, -36, 54, 18, [20, 20, 3, 3], o.capColor || '#2E5A44', 2.4);
+    inkrr(c, 4, -22, 30, 6, 3, o.capColor || '#2E5A44', 2.2);
+  }
+  c.restore(); c.restore();
+}
+function drawJanitor(c, x, y, s, o = {}) {
+  return drawEntity(c, x, y, s, { cap: true, badge: true, ...o, prop: o.mop === false ? 'none' : 'mop' });
+}
+
+// Macro POV Forearm (400px — smartphone, iced coffee, receipt, watch)
+function hand(c, x, y, ang = 0, s = 1, o = {}) {
+  const K = { ...PROTAGONIST, ...(o.colors || {}) };
+  c.save(); c.translate(x, y); c.rotate(ang); c.scale(s, s);
+  inkrr(c, -26, 0, 52, 400, 22, cyl(c, -26, 52, K.skin, K.skinHi, K.skinSh), 2.8);
+  inkrr(c, -32, -38, 64, 54, 20, K.skin, 2.8);
+  for (let i = 0; i < 4; i++) { inkrr(c, -28 + i * 15, -62, 12, 32, 6, K.skin, 2.4); }
+  if (o.sleeve !== false) { inkrr(c, -31, 90, 62, 320, 14, o.sleeveColor || K.shirt, 2.8); }
+  if (o.watch) {
+    const label = typeof o.watch === 'string' ? o.watch : '08:45';
+    inkrr(c, -29, 32, 58, 16, 3, '#27272A', 2.2);
+    inkrr(c, -20, 24, 40, 30, 6, '#18181B', 2.4);
+    txt(c, label, 0, 44, 13, '#4ADE80', 700, 'center');
+  }
+  if (o.phone) {
+    c.save(); c.translate(0, -82);
+    inkrr(c, -42, -74, 84, 148, 12, '#18181B', 3);
+    inkrr(c, -36, -64, 72, 126, 8, '#F8FAFC', 2);
+    // Banking / Chat screen header
+    c.fillStyle = o.phoneHeader || '#16A34A'; rr(c, -36, -64, 72, 26, [8, 8, 0, 0]); c.fill();
+    txt(c, o.phoneTitle || 'K-PLUS', 0, -46, 12, '#FFFFFF', 800, 'center');
+    txt(c, o.phoneText || '฿ 42.50', 0, -4, 18, '#DC2626', 800, 'center');
+    txt(c, o.phoneSub || 'ยอดเงินคงเหลือ', 0, 18, 10, '#64748B', 600, 'center');
+    c.restore();
+  }
+  if (o.coffee) {
+    drawIcedCoffeeCup(c, 0, -56, 2.1);
+  }
+  c.restore();
+}
+
+// --------------------------------------------------------- EVERYDAY SITCOM STAGES & BACKGROUNDS
+// 1. Neighborhood Street + Coffee & Bakery Shop (Inspired directly by the user's reference image!)
+function streetCafeStage(c, t = 0, o = {}) {
+  const pan = (o.pan || 0) * t;
+  // Clear warm daylight sky
+  const skyG = c.createLinearGradient(0, 0, 0, 480);
+  skyG.addColorStop(0, o.skyTop || '#7CC2F5');
+  skyG.addColorStop(1, o.skyBot || '#CBE8FC');
+  c.fillStyle = skyG; c.fillRect(0, 0, W, 480);
+
+  // Soft clouds
+  c.fillStyle = 'rgba(255,255,255,0.72)';
+  for (const [cx, cy, r] of [[210, 88, 38], [250, 82, 48], [295, 90, 34], [620, 68, 42], [665, 64, 52]]) {
+    const x = ((cx - pan * 0.15) % (W + 200) + W + 200) % (W + 200) - 100;
+    c.beginPath(); c.arc(x, cy, r, 0, TAU); c.fill();
+  }
+
+  // Background neighborhood brick row buildings (left side)
+  const bgShift = -pan * 0.35;
+  inkrr(c, -40 + bgShift, 220, 240, 260, 4, '#D9A76A', 2.6);
+  inkrr(c, 190 + bgShift, 250, 190, 230, 4, '#C89258', 2.6);
+  for (let wx = 10; wx < 340; wx += 64) {
+    inkrr(c, wx + bgShift, 272, 34, 48, 3, '#475B63', 2.2);
+    inkrr(c, wx + bgShift, 355, 34, 58, 3, '#3E5A4C', 2.2);
+  }
+
+  // Lush green neighborhood trees
+  const drawTreeCanopy = (tx, ty, tr, col = '#5B8736', sh = '#3E6024') => {
+    c.fillStyle = sh; c.strokeStyle = INK_OUTLINE; c.lineWidth = 2.6;
+    c.beginPath(); c.arc(tx, ty + 10, tr, 0, TAU); c.fill(); c.stroke();
+    c.fillStyle = col;
+    for (const [ox, oy, rr] of [[-tr * 0.45, -6, tr * 0.72], [tr * 0.45, -4, tr * 0.7], [0, -tr * 0.48, tr * 0.78]]) {
+      c.beginPath(); c.arc(tx + ox, ty + oy, rr, 0, TAU); c.fill(); c.stroke();
+    }
+  };
+  drawTreeCanopy(430 + bgShift * 0.6, 290, 74, '#65933D', '#476A2A');
+
+  // Main Tree Trunk on left sidewalk
+  const treeX = 165 - pan * 0.6;
+  inkrr(c, treeX - 24, 90, 48, 410, 8, '#5C4028', 2.8);
+  drawTreeCanopy(treeX + 10, 68, 128, '#5B8736', '#3E6024');
+
+  // Right Side: Warm Tan Brick COFFEE & BAKERY Building
+  const shopX = 650 - pan * 0.6;
+  inkrr(c, shopX, -20, 680, 520, 4, '#DFAF7B', 3);
+  // Subtle brick mortar lines
+  c.strokeStyle = 'rgba(120,75,35,0.25)'; c.lineWidth = 2;
+  for (let by = 30; by < 480; by += 42) {
+    c.beginPath(); c.moveTo(shopX, by); c.lineTo(shopX + 680, by); c.stroke();
+  }
+  // Upper apartment window
+  inkrr(c, shopX + 160, 12, 220, 96, 4, '#2F3640', 3);
+  inkrr(c, shopX + 172, 20, 92, 80, 2, '#4A5568', 2);
+  inkrr(c, shopX + 276, 20, 92, 80, 2, '#4A5568', 2);
+
+  // Dark forest-green storefront frame & cozy warm interior glow
+  inkrr(c, shopX + 70, 210, 560, 285, 4, '#1E3329', 3);
+  // Windows with warm café pendant lamps inside
+  for (const [wx, ww] of [[shopX + 94, 150], [shopX + 266, 140], [shopX + 428, 175]]) {
+    inkrr(c, wx, 232, ww, 240, 3, '#283630', 2.4);
+    glow(c, wx + ww / 2, 285, 68, '#FDE047', 0.35);
+    c.fillStyle = '#FEF08A';
+    c.beginPath(); c.arc(wx + ww / 2, 268, 12, Math.PI, 0); c.fill();
+  }
+  // Potted café plant & patio bistro table outside
+  inkrr(c, shopX + 35, 425, 58, 65, 6, '#B45309', 2.6);
+  drawTreeCanopy(shopX + 64, 396, 38, '#4D7C2B', '#36581E');
+
+  // Striped Green & Cream Awning ("COFFEE & BAKERY")
+  const awnX = shopX + 20, awnY = 115, awnW = 620, awnH = 88;
+  const stripes = 12;
+  const sw = awnW / stripes;
+  for (let i = 0; i < stripes; i++) {
+    c.fillStyle = i % 2 === 0 ? '#2E5A44' : '#F3EDE0';
+    c.strokeStyle = INK_OUTLINE; c.lineWidth = 2.4;
+    c.beginPath();
+    c.moveTo(awnX + i * sw + 28, awnY);
+    c.lineTo(awnX + (i + 1) * sw + 28, awnY);
+    c.lineTo(awnX + (i + 1) * sw, awnY + awnH);
+    c.lineTo(awnX + i * sw, awnY + awnH);
+    c.closePath(); c.fill(); c.stroke();
+  }
+  // Awning front valance banner with "COFFEE & BAKERY"
+  inkrr(c, awnX - 4, awnY + awnH - 4, awnW + 8, 46, 4, '#244735', 2.8);
+  txt(c, o.shopTitle || 'COFFEE & BAKERY', awnX + awnW / 2, awnY + awnH + 29, 31, '#F5EFE6', 800, 'center');
+
+  // Sidewalk & Curb + Asphalt Street + Crosswalk Stripe
+  // Asphalt road
+  c.fillStyle = '#525860'; c.fillRect(0, 465, W, H - 465);
+  // Curved sidewalk
+  c.fillStyle = '#D6CEBF'; c.strokeStyle = INK_OUTLINE; c.lineWidth = 2.8;
+  c.beginPath();
+  c.moveTo(0, 455); c.lineTo(W, 565); c.lineTo(W, 465); c.lineTo(0, 420); c.closePath();
+  c.fill(); c.stroke();
+  // Curb edge
+  c.fillStyle = '#BEB5A4';
+  c.beginPath();
+  c.moveTo(0, 455); c.lineTo(W, 565); c.lineTo(W, 584); c.lineTo(0, 472); c.closePath();
+  c.fill(); c.stroke();
+  // White crosswalk rectangle on asphalt
+  c.save(); c.translate(920 - pan * 0.6, 635); c.rotate(0.08);
+  inkrr(c, -130, -22, 260, 44, 3, '#E7E5E4', 2.2);
+  c.restore();
+
+  // Multi-Plate Green Street Sign Pole on left ("Oak St." / "Maple Ave." / "3rd St.")
+  if (o.streetSign !== false) {
+    const sx = 128 - pan * 0.6;
+    inkrr(c, sx - 7, 65, 14, 410, 4, '#3F3F46', 2.6);
+    inkrr(c, sx - 26, 462, 52, 18, 6, '#52525B', 2.6);
+    const signs = o.signs || ['ซอยสุขุมวิท 21', 'ถ.อโศกมนตรี', 'คาเฟ่เปิดใหม่'];
+    signs.forEach((label, idx) => {
+      const sy = 76 + idx * 54;
+      c.save(); c.translate(sx, sy);
+      c.fillStyle = '#2E473B'; c.strokeStyle = INK_OUTLINE; c.lineWidth = 2.6;
+      c.beginPath();
+      c.moveTo(-88, 0); c.lineTo(96, 6); c.lineTo(114, 24); c.lineTo(96, 42); c.lineTo(-88, 36); c.lineTo(-106, 18); c.closePath();
+      c.fill(); c.stroke();
+      c.strokeStyle = '#E7E5E4'; c.lineWidth = 1.8;
+      c.strokeRect(-82, 5, 172, 30);
+      txt(c, label, 4, 27, fitTextSize(c, label, 160, 19, 13, 700), '#FAF6EE', 700, 'center');
+      c.restore();
+    });
+  }
+
+  // Wooden A-Frame Sidewalk Chalkboard ("Today's Special")
+  if (o.chalkboard !== false) {
+    const bx = shopX + 355, by = 340;
+    c.save(); c.translate(bx, by);
+    // Back leg
+    inkrr(c, 118, 12, 16, 175, 4, '#784721', 2.4);
+    // Main wooden frame
+    inkrr(c, 0, 0, 148, 192, 6, '#9A5B2B', 2.8);
+    // Black slate board
+    inkrr(c, 12, 14, 124, 152, 4, '#1E2422', 2.4);
+    const boardLines = o.chalkLines || ["Today's Special", 'อเมริกาโน่ส้มยูซุ', 'ครัวซองต์เนยสด', 'แก้วละ 145.-', 'Open 8am - 6pm'];
+    txt(c, boardLines[0] || "Today's Special", 74, 42, 16, '#FDE68A', 700, 'center');
+    for (let i = 1; i < boardLines.length; i++) {
+      txt(c, boardLines[i], 74, 46 + i * 26, fitTextSize(c, boardLines[i], 112, 14, 11, 600), '#F5EFE6', 600, 'center');
+    }
+    c.restore();
+  }
+}
+
+// 2. Open-Plan Thai Office Stage (Desks, monitors, water cooler, wall clock)
+function officeStage(c, t = 0, o = {}) {
+  // Cream/sage office wall + carpet floor
+  c.fillStyle = o.wallCol || '#EAE4D7'; c.fillRect(0, 0, W, 470);
+  c.fillStyle = o.floorCol || '#94A3B8'; c.fillRect(0, 470, W, H - 470);
+  c.strokeStyle = INK_OUTLINE; c.lineWidth = 3;
+  c.beginPath(); c.moveTo(0, 470); c.lineTo(W, 470); c.stroke();
+
+  // Large glass office window showing city sky
+  inkrr(c, 80, 64, 460, 260, 6, '#BAE6FD', 3);
+  c.strokeStyle = INK_OUTLINE; c.lineWidth = 3;
+  c.beginPath(); c.moveTo(310, 64); c.lineTo(310, 324); c.moveTo(80, 194); c.lineTo(540, 194); c.stroke();
+
+  // Office Wall Clock
+  const cx = 640, cy = 115;
+  c.fillStyle = '#FFFFFF'; c.strokeStyle = INK_OUTLINE; c.lineWidth = 3;
+  c.beginPath(); c.arc(cx, cy, 38, 0, TAU); c.fill(); c.stroke();
+  c.beginPath(); c.moveTo(cx, cy); c.lineTo(cx + 16, cy + 8); c.moveTo(cx, cy); c.lineTo(cx, cy - 24); c.stroke();
+
+  // Whiteboard / KPI chart
+  inkrr(c, 740, 74, 380, 210, 8, '#FFFFFF', 3);
+  txt(c, o.boardTitle || '📊 ประชุมด่วน (รอบที่ 5 ของวัน)', 930, 112, 19, INK_OUTLINE, 700, 'center');
+  c.fillStyle = '#EF4444'; inkrr(c, 790, 180, 45, 75, 3, '#EF4444', 2.2);
+  c.fillStyle = '#F59E0B'; inkrr(c, 860, 150, 45, 105, 3, '#F59E0B', 2.2);
+  c.fillStyle = '#22C55E'; inkrr(c, 930, 130, 45, 125, 3, '#22C55E', 2.2);
+
+  // Office Desk + Laptop
+  if (o.desk !== false) {
+    const dx = o.deskX || 320, dy = 430;
+    inkrr(c, dx, dy, 420, 22, 4, '#C89D66', 2.8);
+    inkrr(c, dx + 24, dy + 22, 18, 120, 3, '#475569', 2.6);
+    inkrr(c, dx + 378, dy + 22, 18, 120, 3, '#475569', 2.6);
+    // Laptop on desk
+    inkrr(c, dx + 160, dy - 56, 92, 56, 5, '#334155', 2.6);
+    inkrr(c, dx + 144, dy - 6, 124, 8, 3, '#64748B', 2.4);
+    drawIcedCoffeeCup(c, dx + 310, dy - 12, 1.1);
+  }
+}
+
+// 3. Cozy Thai Condo / Living Room / Convenience Store Interior Stage
+function roomInteriorStage(c, t = 0, o = {}) {
+  c.fillStyle = o.wallCol || '#F5E6C8'; c.fillRect(0, 0, W, 480);
+  c.fillStyle = o.floorCol || '#C89D66'; c.fillRect(0, 480, W, H - 480);
+  c.strokeStyle = INK_OUTLINE; c.lineWidth = 3;
+  c.beginPath(); c.moveTo(0, 480); c.lineTo(W, 480); c.stroke();
+
+  // Framed wall poster
+  inkrr(c, 160, 88, 180, 220, 6, '#FEF3C7', 2.8);
+  txt(c, o.posterText || 'พรุ่งนี้ค่อยลด', 250, 200, 22, '#B45309', 800, 'center');
+
+  // Sofa & houseplant
+  if (o.sofa !== false) {
+    inkrr(c, 420, 340, 440, 145, 22, o.sofaCol || '#3B82F6', 3);
+    inkrr(c, 395, 380, 45, 110, 14, o.sofaCol || '#2563EB', 2.8);
+    inkrr(c, 840, 380, 45, 110, 14, o.sofaCol || '#2563EB', 2.8);
+  }
+}
+
+// 4. Split-Screen Phone Call / Group Chat Reaction Stage
+function splitChatStage(c, t = 0, leftFn, rightFn) {
+  c.save();
+  c.beginPath(); c.moveTo(0, 0); c.lineTo(665, 0); c.lineTo(615, H); c.lineTo(0, H); c.closePath();
+  c.clip();
+  if (leftFn) leftFn(c, t);
+  c.restore();
+
+  c.save();
+  c.beginPath(); c.moveTo(665, 0); c.lineTo(W, 0); c.lineTo(W, H); c.lineTo(615, H); c.closePath();
+  c.clip();
+  if (rightFn) rightFn(c, t);
+  c.restore();
+
+  // Comic diagonal divider lightning bolt line
+  c.strokeStyle = '#FFFFFF'; c.lineWidth = 10;
+  c.beginPath(); c.moveTo(665, 0); c.lineTo(615, H); c.stroke();
+  c.strokeStyle = INK_OUTLINE; c.lineWidth = 4;
+  c.beginPath(); c.moveTo(665, 0); c.lineTo(615, H); c.stroke();
+}
+
+// Legacy stage compatibility wrappers
+const LIT = { wall: '#EAE4D7', wallSh: '#D6CEBF', floor: '#C89D66', line: '#B58952', ceil: '#F5EFE6', fog: '#F5E6C8', shutter: '#2E5A44', rib: '#1E3329', panel: '#FFFBE8' };
+const DARK = { wall: '#334155', wallSh: '#1E293B', floor: '#475569', line: '#64748B', ceil: '#1E293B', fog: '#0F172A', shutter: '#334155', rib: '#1E293B', panel: '#E2E8F0' };
+const PK = LIT;
+function corridor(c, t, o = {}) { streetCafeStage(c, t, o); return (X, Y, z) => [640 + X * 120, 480 - Y * 80]; }
+function outdoorStage(c, t, o = {}) { streetCafeStage(c, t, o); return { horizonY: 465 }; }
+function roomCorner(c, o = {}) { roomInteriorStage(c, 0, o); return { cx: 520, topY: 90, botY: 480 }; }
+function topDownRoom(c, o = {}) { officeStage(c, 0, o); return { rx: 120, ry: 90, rw: 640, rh: 520 }; }
+function cctvOverlay(c, t, o = {}) {}
+
+// --------------------------------------------------------- ATMOSPHERIC POST & SHADERS
+function vignette(c, k = 0.22, inner = 0.62, col = '#18181B') {
+  const g = c.createRadialGradient(W / 2, H / 2, H * inner, W / 2, H / 2, H * 0.98);
+  g.addColorStop(0, rgba(col, 0)); g.addColorStop(1, rgba(col, k)); c.fillStyle = g; c.fillRect(0, 0, W, H);
+}
+function darken(c, a = 0.15, col = '#18181B') {
+  if (typeof a === 'string') a = 0.15;
+  c.fillStyle = rgba(col, a); c.fillRect(0, 0, W, H);
+}
+function emergency(c, x, y, r, a = 0.25) {
+  if (y === undefined || r === undefined) { x = W / 2; y = 180; r = 520; a = 0.25; }
+  c.save(); c.globalCompositeOperation = 'screen'; glow(c, x, y, r, '#FACC15', a); c.restore();
+}
+function frostOverlay() {}
+
+const grainCv = typeof document !== 'undefined' ? document.createElement('canvas') : null;
+if (grainCv) {
+  grainCv.width = grainCv.height = 256;
+  const g = grainCv.getContext('2d'), d = g.createImageData(256, 256);
+  for (let i = 0; i < d.data.length; i += 4) { const v = hash(i * 0.37) * 255; d.data[i] = d.data[i + 1] = d.data[i + 2] = v; d.data[i + 3] = 255; }
+  g.putImageData(d, 0, 0);
+}
+function grain(c, T, a = 0.02) {
+  if (!grainCv) return;
+  c.save(); c.globalAlpha = a; c.globalCompositeOperation = 'overlay';
+  const ox = Math.floor(hash(Math.floor(T * 30)) * 256), oy = Math.floor(hash(Math.floor(T * 30) + 5) * 256);
+  c.translate(-ox, -oy); c.fillStyle = c.createPattern(grainCv, 'repeat'); c.fillRect(0, 0, W + 256, H + 256); c.restore();
+}
+
+// --------------------------------------------------------- SITCOM & SOCIAL MEDIA HUD CARDS, TELEMETRY & SUBTITLES
+const CREAM = '#FFFDF9', INK = '#18181B', RED = '#DC2626', YELLOW = '#FACC15', GREEN = '#16A34A';
+const CARD = { bg: CREAM, ink: INK, red: RED, muted: '#57534E' };
+
+function badge(c, x, y, s, dark = true) {
+  const isHex = typeof dark === 'string';
+  c.font = `700 15px ${FONT}`; const w = c.measureText(s).width + 24;
+  const fillCol = isHex ? dark : (dark ? '#18181B' : RED);
+  inkrr(c, x, y, w, 26, 13, fillCol, 2, INK_OUTLINE);
+  txt(c, s, x + 12, y + 18.5, 15, fillCol === '#FACC15' ? INK_OUTLINE : '#fff', 700); return w;
+}
+function cardBox(c, x, y, w, h, bgCol = CREAM) {
+  c.save();
+  // Crisp comic offset drop shadow
+  c.fillStyle = 'rgba(24,24,27,0.88)';
+  rr(c, x + 6, y + 6, w, h, 14); c.fill();
+  c.restore();
+  inkrr(c, x, y, w, h, 14, bgCol, 3, INK_OUTLINE);
+}
+function measure(c, s, size, weight = 700) { c.font = `${weight} ${size}px ${FONT}`; return c.measureText(s).width; }
+function fitTextSize(c, s, maxW, startSize, minSize = 14, weight = 700) {
+  let sz = startSize;
+  while (sz > minSize && measure(c, s, sz, weight) > maxW) sz -= 1;
+  return sz;
+}
+function cardPos(pos, w, h) {
+  const shorts = typeof window !== 'undefined' && window.SHORTS_MODE;
+  const maxX = shorts ? (W - w - 140) : (W - w - 46);
+  let x, y;
+  if (pos === 'tl' || pos === 'left') { x = 56; y = 54; }
+  else if (pos === 'tr') { x = W - w - 56; y = 178; }
+  else if (pos === 'r' || pos === 'right') { x = W - w - 56; y = (H - h) / 2 + 24; }
+  else { x = (W - w) / 2; y = (H - h) / 2 - 20; }
+  return [clamp(x, 24, Math.max(24, maxX)), clamp(y, 24, Math.max(24, H - h - 76))];
+}
+
+function normalizeCard(s) {
+  if (!s) return null;
+  if (s.card) return s.card;
+  if (!s.hud) return null;
+  const h = s.hud;
+  const at = h.at !== undefined ? h.at : 0.4;
+  const pos = h.pos || 'tr';
+  if (h.type === 'speech' || h.type === 'thought') {
+    return {
+      type: 'rule', at, pos,
+      badge: h.speaker ? `💬 ${h.speaker}` : (h.type === 'thought' ? '💭 คิดในใจ' : '💬 บทสนทนา'),
+      title: Array.isArray(h.title) ? h.title : [h.text || h.title || '', h.sub || ''].filter(Boolean),
+      sub: h.eng || h.tag || ''
+    };
+  }
+  if (h.type === 'social' || h.type === 'chat') {
+    return {
+      type: 'info', at, pos,
+      badge: h.app ? `📱 ${h.app} · ${h.user || ''}` : (h.badge || '📱 โซเชียลมีเดีย · SOCIAL'),
+      title: Array.isArray(h.title) ? h.title : [h.text || h.title || '', h.sub || ''].filter(Boolean),
+      sub: h.likes ? `❤️ ${h.likes}   💬 ${h.comments || '1.2K'}` : (h.eng || '')
+    };
+  }
+  if (h.type === 'punchline' || h.type === 'rule') {
+    return {
+      type: 'rule', at, pos,
+      badge: h.badge || `🤣 ${h.ruleNo || 'มุกตลกประจำซีน'}`,
+      title: Array.isArray(h.title) ? h.title : [h.title || '', h.sub || ''].filter(Boolean),
+      sub: h.eng || 'SITCOM PUNCHLINE'
+    };
+  }
+  if (h.type === 'info' || h.type === 'chalkboard') {
+    return {
+      type: 'info', at, pos,
+      badge: h.badge || '☕ เมนูวันนี้ · TODAY SPECIAL',
+      title: Array.isArray(h.title) ? h.title : [h.title || '', h.sub || ''].filter(Boolean),
+      sub: Array.isArray(h.title) ? (h.sub || '') : (h.eng || '')
+    };
+  }
+  if (h.type === 'inventory') {
+    return { type: 'inventory', at, pos: h.pos || 'tr', badge: h.badge || '🎒 ของในตะกร้า · ITEMS', items: (h.items || []).map(it => Array.isArray(it) ? it : [it.icon || '•', it.name, it.qty]) };
+  }
+  if (h.type === 'price_tag' || h.type === 'math' || h.type === 'calc') {
+    return { type: 'calc', at, pos: h.pos || 'r', badge: h.badge || '🧾 เช็กบิลชีวิตจริง · RECEIPT', rows: h.rows || [], total: h.total || ['รวมทั้งหมด', 'ช็อตฟีล'], note: h.note || [] };
+  }
+  if (h.type === 'versus' || h.type === 'dilemma' || h.type === 'flow') {
+    return {
+      type: 'flow', at, head: h.head || 'สิ่งที่คิด VS ความเป็นจริง',
+      left: h.left || { tag: h.optA.title, icon: h.optA.icon || '😎', res: h.optA.res, en: h.optA.en, danger: Boolean(h.optA.danger) },
+      right: h.right || { tag: h.optB.title, icon: h.optB.icon || '😭', res: h.optB.res, en: h.optB.en, danger: h.optB.danger !== false }
+    };
+  }
+  if (h.type === 'anomaly' || h.type === 'clue') {
+    return { type: 'clue', at, pos: h.pos || 'r', badge: h.badge || '❗ จุดพีค · PLOT TWIST', glyph: h.glyph || '😳', title: Array.isArray(h.title) ? h.title : [h.title || '', h.sub || ''].filter(Boolean), sub: h.detail || h.eng || '' };
+  }
+  return null;
+}
+
+function drawCard(c, rawCard, lt, sceneDur) {
+  const card = rawCard && !rawCard.pos && !rawCard.head && !rawCard.rows && !rawCard.items && !Array.isArray(rawCard.title)
+    ? normalizeCard({ hud: rawCard }) : rawCard;
+  if (!card) return;
+  const at = card.at !== undefined ? card.at : 0.4;
+  const k = easeBack(prog(lt, at, at + 0.38)), out = 1 - prog(lt, sceneDur - 0.3, sceneDur);
+  const a = clamp(prog(lt, at, at + 0.2)) * out; if (a <= 0) return;
+  c.save(); c.globalAlpha = a;
+  if (card.type === 'flow') { drawFlow(c, card, lt - at); c.restore(); return; }
+
+  let w, h; const pad = 26;
+  const maxCardW = (typeof window !== 'undefined' && window.SHORTS_MODE) ? 880 : 760;
+
+  if (card.type === 'rule' || card.type === 'info' || card.type === 'clue') {
+    const baseSize = card.small ? 24 : 28;
+    const gw = card.type === 'clue' ? 105 : 0;
+    const lines = card.title || [];
+    const subStr = card.sub || '';
+    const rawW = Math.max(340, ...lines.map(s => measure(c, s, baseSize, 700) + pad * 2 + gw), measure(c, subStr, 13, 600) + pad * 2 + gw, measure(c, card.badge || '', 15, 600) + 64);
+    w = Math.min(maxCardW, rawW);
+    const innerTextW = w - pad * 2 - gw;
+    const lineSizes = lines.map(s => fitTextSize(c, s, innerTextW, baseSize, 17, 700));
+    const subSize = subStr ? fitTextSize(c, subStr, innerTextW, 13, 10, 600) : 13;
+    const lineStep = Math.max(...lineSizes, baseSize) + 10;
+    h = 62 + lines.length * lineStep + (subStr ? 40 : 8);
+
+    const [x, y] = cardPos(card.pos, w, h);
+    c.translate(x + w / 2, y + h / 2); c.scale(0.92 + 0.08 * k, 0.92 + 0.08 * k); c.translate(-w / 2, -h / 2);
+    cardBox(c, 0, 0, w, h);
+    badge(c, pad - 6, 18, card.badge, card.type === 'rule' ? '#FACC15' : '#16A34A');
+    let ty = 62;
+    if (gw) {
+      inkrr(c, pad - 4, 58, 88, h - 76, 10, '#FEF3C7', 2.2);
+      const gSz = String(card.glyph || '😳').length > 2 ? 26 : 42;
+      txt(c, card.glyph || '😳', pad + 40, 58 + (h - 76) / 2 + gSz * 0.34, gSz, INK, 700, 'center');
+    }
+    for (let i = 0; i < lines.length; i++) {
+      const sz = lineSizes[i];
+      ty += sz + 6;
+      txt(c, lines[i], pad + gw, ty, sz, i === 1 && (card.type === 'rule' || card.type === 'clue') ? RED : INK, 700);
+      ty += 4;
+    }
+    if (subStr) {
+      c.fillStyle = '#E5E7EB'; c.fillRect(pad + gw, ty + 10, w - pad * 2 - gw, 2);
+      txt(c, subStr, pad + gw, ty + 32, subSize, card.type === 'rule' ? RED : '#4B5563', 700);
+    }
+  } else if (card.type === 'inventory') {
+    const items = card.items || [];
+    const maxItemW = Math.max(360, ...items.map(it => 86 + measure(c, it[1], 19, 700) + measure(c, it[2], 18, 700) + 32));
+    w = clamp(maxItemW, 380, Math.min(540, maxCardW));
+    h = 66 + items.length * 46;
+    const [x, y] = cardPos(card.pos, w, h);
+    c.translate(x, y); cardBox(c, 0, 0, w, h); badge(c, 20, 18, card.badge, '#2563EB');
+    items.forEach((it, i) => {
+      const ia = prog(lt, at + 0.25 + i * 0.35, at + 0.55 + i * 0.35); if (ia <= 0) return;
+      c.globalAlpha = a * ia; const yy = 64 + i * 46;
+      inkrr(c, 20, yy, 36, 36, 8, '#FEF3C7', 2); txt(c, it[0], 38, yy + 26, 20, INK, 400, 'center');
+      const qtyW = measure(c, it[2], 17, 700);
+      const nameSz = fitTextSize(c, it[1], w - 98 - qtyW, 18, 14, 700);
+      txt(c, it[1], 68, yy + 25, nameSz, INK, 700); txt(c, it[2], w - 22, yy + 25, 17, RED, 700, 'right');
+    });
+  } else if (card.type === 'calc') {
+    const rows = card.rows || [], notes = card.note || [], tot = card.total || ['', ''];
+    const rowMaxW = Math.max(520, ...rows.map(r => 68 + measure(c, r[0], 18, 600) + measure(c, r[1], 19, 700)), 68 + measure(c, tot[0], 21, 700) + measure(c, tot[1], 23, 700), ...notes.map(n => 68 + measure(c, '▸ ' + n, 15, 600)));
+    w = Math.min(maxCardW, Math.max(520, rowMaxW));
+    h = 70 + rows.length * 40 + 60 + notes.length * 26 + 10;
+    const [x, y] = cardPos(card.pos, w, h);
+    c.translate(x + w / 2, y + h / 2); c.scale(0.92 + 0.08 * k, 0.92 + 0.08 * k); c.translate(-w / 2, -h / 2);
+    cardBox(c, 0, 0, w, h); badge(c, 20, 18, card.badge, '#FACC15');
+    let yy = 72;
+    rows.forEach((r, i) => {
+      const ia = prog(lt, at + 0.35 + i * 0.45, at + 0.65 + i * 0.45); c.globalAlpha = a * ia;
+      const valW = measure(c, r[1], 19, 700);
+      const lblSz = fitTextSize(c, r[0], w - 68 - valW, 18, 13, 600);
+      txt(c, r[0], 26, yy + 22, lblSz, INK, 600); txt(c, r[1], w - 26, yy + 22, 19, INK, 700, 'right'); yy += 40;
+    });
+    const ta = prog(lt, at + 0.35 + rows.length * 0.45, at + 0.75 + rows.length * 0.45); c.globalAlpha = a * ta;
+    c.fillStyle = INK; c.fillRect(26, yy + 4, w - 52, 2.5);
+    const totValW = measure(c, tot[1], 23, 700);
+    const totLblSz = fitTextSize(c, tot[0], w - 68 - totValW, 21, 15, 700);
+    txt(c, tot[0], 26, yy + 40, totLblSz, INK, 700); txt(c, tot[1], w - 26, yy + 40, 23, RED, 800, 'right'); yy += 60;
+    notes.forEach((n, i) => {
+      const na = prog(lt, at + 1.8 + i * 0.5, at + 2.2 + i * 0.5); c.globalAlpha = a * na;
+      const nSz = fitTextSize(c, '▸ ' + n, w - 52, 15, 12, 600);
+      txt(c, '▸ ' + n, 26, yy + 20, nSz, i === notes.length - 1 ? RED : '#4B5563', 700); yy += 26;
+    });
+  }
+  c.restore();
+}
+
+function drawFlow(c, card, lt) {
+  const cx = 480, top = 110;
+  const headSz = fitTextSize(c, card.head, 640, 22, 16, 700);
+  c.font = `700 ${headSz}px ${FONT}`; const hw = Math.min(700, c.measureText(card.head).width + 48);
+  inkrr(c, cx - hw / 2, top, hw, 46, 23, '#FACC15', 3);
+  txt(c, card.head, cx, top + 30, headSz, INK, 800, 'center');
+  const k = easeOut(prog(lt, 0.2, 0.9));
+  c.strokeStyle = INK_OUTLINE; c.lineWidth = 3.5;
+  for (const s of [-1, 1]) {
+    c.beginPath(); c.moveTo(cx, top + 46);
+    c.quadraticCurveTo(cx + s * 190 * k, top + 58, cx + s * 195 * k, top + 98 * k + 2);
+    c.stroke();
+  }
+  [['left', -1, 0.5], ['right', 1, 0.95]].forEach(([key, s, at]) => {
+    const b = card[key]; if (!b) return;
+    const ka = easeBack(prog(lt, at, at + 0.4)); if (ka <= 0) return;
+    const w = 320, h = 186, x = cx + s * 195 - w / 2, y = top + 98;
+    c.save(); c.globalAlpha *= clamp(ka); c.translate(x + w / 2, y); c.scale(0.9 + 0.1 * ka, 0.9 + 0.1 * ka); c.translate(-w / 2, 0);
+    cardBox(c, 0, 0, w, h);
+    txt(c, b.tag, w / 2, 34, fitTextSize(c, b.tag, w - 30, 19, 13, 700), '#4B5563', 700, 'center');
+    txt(c, b.icon, w / 2, 92, 42, INK, 400, 'center');
+    txt(c, b.res, w / 2, 138, fitTextSize(c, b.res, w - 30, 22, 14, 700), b.danger ? RED : GREEN, 800, 'center');
+    if (b.en) txt(c, b.en, w / 2, 166, fitTextSize(c, b.en, w - 30, 12, 10, 600), '#6B7280', 600, 'center');
+    c.restore();
+  });
+}
+
+// Sitcom Everyday Status Telemetry (supports Wallet Baht, Caffeine, Phone Battery, Mood, or Custom Bar)
+function drawTele(c, s, lt) {
+  const tl = s.tele || s.telemetry; if (!tl) return;
+  const x = W - 46, y = 36, w = 320;
+  const dayStr = tl.day === 0 ? '☀️ เช้าวันทำงาน' : `📍 ${tl.day}`;
+  const timeStr = tl.time || '';
+  const subLabel = tl.label || tl.shift || '';
+
+  let bar = tl.bar || null;
+  if (!bar && tl.wallet != null) {
+    const r = clamp(tl.wallet / (tl.wmax || 1000)), low = tl.wallet < 100;
+    bar = { label: 'เงินในบัญชี', ratio: r, text: `฿${tl.wallet}`, color: low ? '#EF4444' : '#22C55E', warn: low };
+  } else if (!bar && tl.caffeine != null) {
+    const r = clamp(tl.caffeine / 100), low = tl.caffeine < 30;
+    bar = { label: 'คาเฟอีน', ratio: r, text: `${tl.caffeine}%`, color: low ? '#F59E0B' : '#10B981', warn: low };
+  } else if (!bar && tl.battery != null) {
+    const r = clamp(tl.battery / 100), low = tl.battery <= 15;
+    bar = { label: 'แบตมือถือ', ratio: r, text: `${tl.battery}%`, color: low ? '#EF4444' : '#38BDF8', warn: low };
+  } else if (!bar && tl.kcal != null) {
+    const r = clamp(tl.kcal / (tl.kmax || 2400)), low = r < 0.3;
+    bar = { label: 'พลังงานชีวิต', ratio: r, text: `${tl.kcal} kcal`, color: low ? '#EF4444' : '#FACC15', warn: low };
+  }
+
+  c.save(); c.globalAlpha = clamp(lt / 0.3);
+  const h = 62 + (bar ? 30 : 0) + (subLabel ? 26 : 0);
+  cardBox(c, x - w, y, w, h, '#FFFDF9');
+  txt(c, dayStr, x - w + 16, y + 26, fitTextSize(c, dayStr, w - 120, 15, 12, 700), INK, 700);
+  if (timeStr) txt(c, timeStr, x - 16, y + 46, 28, INK, 800, 'right');
+
+  const statusTxt = tl.statusText || (tl.mood ? `อารมณ์: ${tl.mood}` : '');
+  if (statusTxt) txt(c, statusTxt, x - w + 16, y + 50, 14, '#B45309', 700);
+
+  let yy = y + 62;
+  if (bar) {
+    const r = clamp(bar.ratio !== undefined ? bar.ratio : (bar.value / (bar.max || 100)));
+    txt(c, bar.label || 'สถานะ', x - w + 16, yy + 18, 13, '#4B5563', 700);
+    inkrr(c, x - w + 92, yy + 7, 122, 12, 6, '#E5E7EB', 1.8);
+    inkrr(c, x - w + 92, yy + 7, Math.max(8, 122 * r), 12, 6, bar.color || '#22C55E', 1.8);
+    txt(c, bar.text || `${bar.value}${bar.unit || ''}`, x - 16, yy + 19, 14, bar.warn ? RED : INK, 800, 'right');
+    yy += 30;
+  }
+
+  if (subLabel) {
+    txt(c, subLabel, x - w + 16, yy + 15, fitTextSize(c, subLabel, w - 32, 14, 11, 700), '#D97706', 700);
+  }
+  c.restore();
+}
+
+function drawChapter(c, chap, lt) {
+  const label = Array.isArray(chap) ? chap[0] : (chap.label || '');
+  const title = Array.isArray(chap) ? chap[1] : (chap.title || '');
+  const a = clamp(prog(lt, 0, 0.35)) * (1 - prog(lt, 2.8, 3.3));
+  if (a <= 0) return;
+  c.save(); c.globalAlpha = a;
+  const ox = (1 - easeOut(lt / 0.6)) * -30;
+  c.font = `700 20px ${FONT}`; const bw = c.measureText(label).width + 36;
+  inkrr(c, W / 2 - bw / 2 + ox, H / 2 - 68, bw, 38, 19, '#FACC15', 3);
+  txt(c, label, W / 2 + ox, H / 2 - 42, 20, INK, 800, 'center');
+  const tSz = fitTextSize(c, title, W - 120, 44, 24, 800);
+  c.font = `800 ${tSz}px ${FONT}`; c.textAlign = 'center';
+  c.lineJoin = 'round'; c.lineWidth = 8; c.strokeStyle = INK_OUTLINE; c.strokeText(title, W / 2 - ox, H / 2 + 28);
+  c.fillStyle = '#FFFDF9'; c.fillText(title, W / 2 - ox, H / 2 + 28);
+  c.restore();
+}
+
+// --------------------------------------------------------- SUBTITLES (FRAMELESS — 9:16 Safe Zone Aware)
+function drawSub(c, s, lt) {
+  if (!s.subs) return;
+  const cue = s.subs.find(q => {
+    const t0 = q.t0 !== undefined ? q.t0 : q.start;
+    const t1 = q.t1 !== undefined ? q.t1 : q.end;
+    return lt >= t0 && lt < t1;
+  });
+  if (!cue) return;
+  const isShorts = typeof window !== 'undefined' && window.SHORTS_MODE;
+  const subY = isShorts ? Math.min(H - 42, 1420) : (H - 42);
+  const subSz = fitTextSize(c, cue.text, W - 120, 30, 20, 800);
+  c.save(); c.font = `800 ${subSz}px ${FONT}`; c.textAlign = 'center'; c.textBaseline = 'alphabetic';
+  c.lineJoin = 'round'; c.lineWidth = 8; c.strokeStyle = 'rgba(24,24,27,0.96)'; c.strokeText(cue.text, W / 2, subY);
+  c.shadowColor = 'rgba(0,0,0,0.45)'; c.shadowBlur = 8; c.fillStyle = '#FEF08A'; c.fillText(cue.text, W / 2, subY); c.restore();
+}
