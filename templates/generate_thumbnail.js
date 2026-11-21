@@ -1,10 +1,10 @@
 // =============================================================================
-//  generate_thumbnail.js — Key-Scene Long-Form YouTube Thumbnails (1920x1080)
-//  Part of skill: reallens-horror-animator
+//  generate_thumbnail.js — Vibrant Sitcom YouTube Thumbnails (1920x1080)
+//  Part of skill: thai-sitcom-animator
 //  Uses shorts_planner.js (pickTopLongFormHighlights + pickKeyTimestampInScene)
-//  to select high-tension showdown + 5 dramatic escalation panels, rather than
-//  blind fixed percentages.
-//    1. thumbnail_reallens_showdown.png  (Entity vs Protagonist + Rule 1 + Telemetry)
+//  with vibrant adult-sitcom ink-outline cards, comic burst callout, 1.18x focal zoom,
+//  and high-CTR stroked multi-tone headlines.
+//    1. thumbnail_reallens_showdown.png  (Vibrant Sitcom Gag + Comic Callout + Status)
 //    2. thumbnail_reallens_5panel.png    (5-Column Key-Scene Escalation Strip)
 //
 //  Usage:
@@ -107,11 +107,17 @@ const climaxScene = highlights.showdownScene || scenes[Math.max(0, scenes.length
 const climaxAbs = planner && climaxScene ? planner.pickKeyTimestampInScene(climaxScene) : ((climaxScene?.start || 0) + Math.min((climaxScene?.dur || 5) * 0.65, 2.5));
 const defaultShowdownLt = climaxScene ? Number(Math.max(0.25, Math.min(climaxAbs - (climaxScene.start || 0), Math.max(0.5, (climaxScene.dur || 5) - 0.2))).toFixed(2)) : 1.5;
 
+const rawTitle = pkgCfg.title || tl.title || 'THAI ADULT SITCOM ANIMATION';
+const mainHook = pkgCfg.mainHook || (rawTitle.includes('|') ? rawTitle.split('|')[0].trim() : rawTitle.trim());
+const seriesBadge = pkgCfg.seriesName || (rawTitle.includes('|') ? rawTitle.split('|').pop().trim() : '') || pkgCfg.pillLabel || 'ซิตคอมชีวิตจริง';
+
 const THUMB_CONFIG = {
-  title: pkgCfg.title || tl.title || 'THAI ADULT SITCOM ANIMATION',
+  title: rawTitle,
+  mainHook,
+  seriesBadge,
   subtitleEn: pkgCfg.subtitleEn || tl.subtitle || 'THAI SITCOM & SOCIAL COMEDY',
   hookQuote: pkgCfg.hookQuote || '“เมื่ออยากใช้ชีวิตสโลว์ไลฟ์... แต่ยอดเงินในบัญชีบอกให้ปั่นไปทำงาน”',
-  pillLabel: pkgCfg.pillLabel || 'ซิตคอมชีวิตจริง',
+  pillLabel: pkgCfg.pillLabel || seriesBadge,
   ruleBadge: pkgCfg.ruleBadge || `🤣 ${firstRuleCard.ruleNo || firstRuleCard.badge || 'ช็อตฟีลประจำวัน'}`,
   ruleLine1: pkgCfg.ruleLine1 || (Array.isArray(firstRuleCard.title) ? firstRuleCard.title[0] : firstRuleCard.title) || 'กาแฟส้มยูซุแก้วละ 145 บาท',
   ruleLine2: pkgCfg.ruleLine2 || (Array.isArray(firstRuleCard.title) ? firstRuleCard.title[1] : firstRuleCard.sub) || 'แต่ในบัญชีมีอยู่ 142 บาท 50 ตังค์!',
@@ -123,6 +129,9 @@ const THUMB_CONFIG = {
   distValue: pkgCfg.distValue || (climaxScene?.telemetry?.distance || '142 บ.'),
   showdownView: pkgCfg.showdownView || climaxScene?.view || scenes[0]?.view,
   showdownLt: pkgCfg.showdownLt != null ? Number(pkgCfg.showdownLt) : defaultShowdownLt,
+  focusX: pkgCfg.focusX != null ? Number(pkgCfg.focusX) : (climaxScene?.focusX || 640),
+  focusY: pkgCfg.focusY != null ? Number(pkgCfg.focusY) : (climaxScene?.focusY || 350),
+  targetLabel: pkgCfg.targetLabel || '💥 ช็อตฟีล!',
   panels: Array.isArray(pkgCfg.panels) && pkgCfg.panels.length ? pkgCfg.panels : highlights.panels
 };
 
@@ -155,12 +164,79 @@ const htmlContent = `<!DOCTYPE html>
       c.save(); c.beginPath(); c.rect(x, 0, w, h); c.clip(); fn(x, w, h); c.restore();
     }
 
+    function drawComicHeadline(text, cx, y, maxW, startSize, minSize) {
+      const sz = fitTextSize(c, text, maxW, startSize, minSize, 900);
+      const kwPat = '(?<![\\u0E40-\\u0E44])(?:\\d+(?:[.,:]\\d+)?(?:\\s*(?:บาท|฿|%|วิ|นาที|ชม\\.|กม\\.))?|ช็อตฟีล|ไม่ตรงปก|เงินเดือน|โบนัส|ประชุม|หนี้|ฟรี|หมดตัว|โอที|\\?\\!)(?![\\u0E31\\u0E34-\\u0E3A\\u0E47-\\u0E4E])';
+      const splitRe = new RegExp('(' + kwPat + ')', 'g');
+      const exactRe = new RegExp('^' + kwPat + '$');
+      const shockRe = /^(?:ช็อตฟีล|ไม่ตรงปก|หนี้|หมดตัว|ประชุม|โอที|\?\!)$/;
+      const parts = String(text || '').split(splitRe).filter(Boolean);
+
+      c.save();
+      c.font = '900 ' + sz + 'px "Kanit", sans-serif';
+      c.textAlign = 'left';
+      c.textBaseline = 'alphabetic';
+      c.lineJoin = 'round';
+      const widths = parts.map(p => c.measureText(p).width);
+      const totalW = widths.reduce((a, b) => a + b, 0);
+
+      // Comic drop offset + crisp dark ink outline
+      c.lineWidth = 16;
+      c.strokeStyle = '#18181B';
+      let px = cx - totalW / 2;
+      for (let i = 0; i < parts.length; i++) {
+        c.strokeText(parts[i], px + 4, y + 6);
+        c.strokeText(parts[i], px, y);
+        px += widths[i];
+      }
+
+      px = cx - totalW / 2;
+      for (let i = 0; i < parts.length; i++) {
+        const p = parts[i];
+        const isShock = shockRe.test(p);
+        const isKw = !isShock && exactRe.test(p);
+        c.fillStyle = isShock ? '#FB7185' : (isKw ? '#FFFFFF' : '#FACC15');
+        c.fillText(p, px, y);
+        px += widths[i];
+      }
+      c.restore();
+    }
+
+    function drawComicBurstCallout(tx, ty, label) {
+      c.save();
+      // Comic highlight ring around focal gag
+      c.strokeStyle = '#18181B'; c.lineWidth = 10;
+      c.beginPath(); c.arc(tx, ty, 82, 0, TAU); c.stroke();
+      c.strokeStyle = '#FACC15'; c.lineWidth = 5;
+      c.beginPath(); c.arc(tx, ty, 82, 0, TAU); c.stroke();
+
+      // Comic pointer arrow & yellow burst pill
+      const ax = tx + 148, ay = ty - 114;
+      c.strokeStyle = '#18181B'; c.lineWidth = 10; c.lineCap = 'round';
+      c.beginPath(); c.moveTo(ax, ay + 24); c.lineTo(tx + 62, ty - 56); c.stroke();
+      c.strokeStyle = '#EF4444'; c.lineWidth = 5;
+      c.beginPath(); c.moveTo(ax, ay + 24); c.lineTo(tx + 62, ty - 56); c.stroke();
+
+      c.font = '900 24px "Kanit", sans-serif';
+      const bw = c.measureText(label).width + 36;
+      c.fillStyle = '#18181B'; rr(c, ax - bw / 2 + 5, ay - 22 + 5, bw, 46, 23); c.fill();
+      c.fillStyle = '#FACC15'; rr(c, ax - bw / 2, ay - 22, bw, 46, 23); c.fill();
+      c.strokeStyle = '#18181B'; c.lineWidth = 3.5; rr(c, ax - bw / 2, ay - 22, bw, 46, 23); c.stroke();
+      txt(c, label, ax, ay + 9, 24, '#18181B', 900, 'center');
+      c.restore();
+    }
+
     window.renderShowdown = function (cfg) {
       c.setTransform(1, 0, 0, 1, 0, 0);
       c.clearRect(0, 0, 1920, 1080);
 
       c.save();
+      c.filter = 'contrast(1.10) saturate(1.22) brightness(1.04)';
       c.scale(1.5, 1.5);
+      const fx = cfg.focusX || 640, fy = cfg.focusY || 350;
+      c.translate(fx, fy);
+      c.scale(1.18, 1.18);
+      c.translate(-fx, -fy);
       const sceneObj = SCENES.find(s => s.view === cfg.showdownView) || SCENES[0] || { view: cfg.showdownView, dur: 5 };
       const viewMap = window.VIEWS || (typeof VIEWS !== 'undefined' ? VIEWS : {});
       const fn = viewMap[cfg.showdownView] || viewMap[sceneObj.view];
@@ -168,48 +244,69 @@ const htmlContent = `<!DOCTYPE html>
         const showdownLt = cfg.showdownLt != null ? Number(cfg.showdownLt) : Math.min((sceneObj.dur || 5) * 0.65, 2.5);
         fn(c, showdownLt, sceneObj);
       } else {
-        corridor(c, 1.5, { pal: DARK, camZ: 2.0 });
-        drawEntity(c, 460, 670, 1.5, { t: 1.5, dark: true, prop: 'none' });
-        drawPerson(c, 920, 680, 1.5, { t: 1.5, dir: -1, expr: 'shock', sweat: true, pose: poseKneel(0.5) });
+        streetCafeStage(c, 1.5, { pan: 18 });
+        drawBicycle(c, 520, 620, 1.35, { t: 1.5, cast: 'ton', expr: 'shock', sweat: true });
+        drawSitcomPerson(c, 920, 620, 1.35, { t: 1.5, dir: -1, cast: 'barista', expr: 'deadpan', coffee: true });
       }
-      vignette(c, 0.72, 0.35);
       c.restore();
 
-      // Top-Left Cream Survival Rule Card
+      c.save();
+      c.scale(1.5, 1.5);
+      vignette(c, 0.25, 0.58);
+      c.restore();
+
+      // Comic Burst Callout on focal gag
+      const ringX = Math.max(460, Math.min(1380, fx * 1.5));
+      const ringY = Math.max(360, Math.min(680, fy * 1.5));
+      drawComicBurstCallout(ringX, ringY, cfg.targetLabel || '💥 ช็อตฟีล!');
+
+      // Top-Left Sitcom Cream Gag Card (4px ink border + offset shadow)
       c.save();
       c.translate(72, 56);
-      cardBox(c, 0, 0, 820, 248);
-      badge(c, 28, 22, cfg.ruleBadge, false);
-      txt(c, cfg.ruleLine1, 32, 114, fitTextSize(c, cfg.ruleLine1, 756, 40, 24, 700), INK, 700);
-      txt(c, cfg.ruleLine2, 32, 170, fitTextSize(c, cfg.ruleLine2, 756, 36, 22, 700), RED, 700);
-      c.fillStyle = '#CFC6B6'; c.fillRect(32, 194, 756, 2);
-      txt(c, cfg.ruleEn, 32, 224, fitTextSize(c, cfg.ruleEn, 756, 17, 12, 600), '#57534E', 600);
+      c.fillStyle = 'rgba(24,24,27,0.92)'; rr(c, 10, 10, 820, 248, 18); c.fill();
+      c.fillStyle = '#FFFDF9'; rr(c, 0, 0, 820, 248, 18); c.fill();
+      c.strokeStyle = '#18181B'; c.lineWidth = 4; rr(c, 0, 0, 820, 248, 18); c.stroke();
+      badge(c, 28, 22, cfg.ruleBadge, '#FACC15');
+      txt(c, cfg.ruleLine1, 32, 114, fitTextSize(c, cfg.ruleLine1, 756, 40, 24, 800), '#18181B', 800);
+      txt(c, cfg.ruleLine2, 32, 170, fitTextSize(c, cfg.ruleLine2, 756, 36, 22, 800), '#DC2626', 800);
+      c.fillStyle = '#E5E7EB'; c.fillRect(32, 194, 756, 2.5);
+      txt(c, cfg.ruleEn, 32, 224, fitTextSize(c, cfg.ruleEn, 756, 17, 12, 700), '#4B5563', 700);
       c.restore();
 
-      // Top-Right Telemetry & Distance Pill
+      // Top-Right Sitcom Status & Wallet Pill
       c.save();
-      c.fillStyle = 'rgba(14,14,18,0.9)'; rr(c, 1380, 56, 468, 126, 16); c.fill();
-      c.strokeStyle = 'rgba(255,255,255,0.16)'; c.lineWidth = 2; rr(c, 1380, 56, 468, 126, 16); c.stroke();
-      txt(c, cfg.teleDay, 1408, 102, fitTextSize(c, cfg.teleDay, 280, 22, 15, 700), '#F87171', 700);
-      txt(c, cfg.teleTime, 1824, 114, 46, '#FFFFFF', 700, 'right');
-      txt(c, cfg.teleSub, 1408, 154, fitTextSize(c, cfg.teleSub, 412, 21, 14, 600), '#FACC15', 600);
+      c.fillStyle = 'rgba(24,24,27,0.92)'; rr(c, 1390, 66, 468, 126, 18); c.fill();
+      c.fillStyle = '#FFFDF9'; rr(c, 1380, 56, 468, 126, 18); c.fill();
+      c.strokeStyle = '#18181B'; c.lineWidth = 4; rr(c, 1380, 56, 468, 126, 18); c.stroke();
+      txt(c, cfg.teleDay, 1408, 102, fitTextSize(c, cfg.teleDay, 280, 22, 15, 800), '#18181B', 800);
+      txt(c, cfg.teleTime, 1824, 114, 44, '#18181B', 900, 'right');
+      txt(c, cfg.teleSub, 1408, 154, fitTextSize(c, cfg.teleSub, 412, 21, 14, 700), '#B45309', 700);
 
-      c.fillStyle = '#F5EFE6'; rr(c, 1420, 198, 428, 72, 14); c.fill();
+      c.fillStyle = 'rgba(24,24,27,0.92)'; rr(c, 1430, 208, 428, 72, 16); c.fill();
+      c.fillStyle = '#FACC15'; rr(c, 1420, 198, 428, 72, 16); c.fill();
+      c.strokeStyle = '#18181B'; c.lineWidth = 4; rr(c, 1420, 198, 428, 72, 16); c.stroke();
       c.fillStyle = '#18181B'; rr(c, 1436, 214, 180, 40, 20); c.fill();
       txt(c, cfg.distLabel, 1526, 241, 20, '#FFFFFF', 700, 'center');
-      txt(c, cfg.distValue, 1824, 246, fitTextSize(c, cfg.distValue, 185, 34, 20, 800), RED, 800, 'right');
+      txt(c, cfg.distValue, 1824, 246, fitTextSize(c, cfg.distValue, 185, 34, 20, 900), '#DC2626', 900, 'right');
       c.restore();
 
-      // Bottom Dark Gradient + Giant Hook Title
-      const bgGrad = c.createLinearGradient(0, 740, 0, 1080);
-      bgGrad.addColorStop(0, 'rgba(0,0,0,0)'); bgGrad.addColorStop(0.5, 'rgba(0,0,0,0.88)'); bgGrad.addColorStop(1, '#000000');
-      c.fillStyle = bgGrad; c.fillRect(0, 740, 1920, 340);
+      // Bottom Sitcom Gradient + Series Pill + Stroked Multi-Tone Comic Headline
+      const bgGrad = c.createLinearGradient(0, 680, 0, 1080);
+      bgGrad.addColorStop(0, 'rgba(24,24,27,0)'); bgGrad.addColorStop(0.48, 'rgba(24,24,27,0.88)'); bgGrad.addColorStop(1, '#18181B');
+      c.fillStyle = bgGrad; c.fillRect(0, 680, 1920, 400);
 
-      const titleSz = fitTextSize(c, cfg.title, 1780, 98, 52, 900);
-      c.save(); c.shadowColor = 'rgba(220,38,38,0.9)'; c.shadowBlur = 36;
-      txt(c, cfg.title, 960, 932, titleSz, '#FAF6EE', 900, 'center'); c.restore();
-      txt(c, cfg.title, 960, 932, titleSz, '#FAF6EE', 900, 'center');
-      txt(c, cfg.hookQuote, 960, 1020, fitTextSize(c, cfg.hookQuote, 1780, 36, 22, 700), '#FACC15', 700, 'center');
+      c.save();
+      c.font = '800 26px "Kanit", sans-serif';
+      const sText = cfg.seriesBadge || cfg.pillLabel || 'ซิตคอมชีวิตจริง';
+      const sbW = Math.min(760, c.measureText(sText).width + 54);
+      c.fillStyle = '#18181B'; rr(c, 960 - sbW / 2 + 4, 756 + 4, sbW, 48, 24); c.fill();
+      c.fillStyle = '#FACC15'; rr(c, 960 - sbW / 2, 756, sbW, 48, 24); c.fill();
+      c.strokeStyle = '#18181B'; c.lineWidth = 3.5; rr(c, 960 - sbW / 2, 756, sbW, 48, 24); c.stroke();
+      txt(c, sText, 960, 789, fitTextSize(c, sText, sbW - 32, 26, 16, 900), '#18181B', 900, 'center');
+      c.restore();
+
+      drawComicHeadline(cfg.mainHook || cfg.title, 960, 922, 1780, 108, 56);
+      txt(c, cfg.hookQuote, 960, 1018, fitTextSize(c, cfg.hookQuote, 1780, 36, 22, 700), '#FFFFFF', 700, 'center');
     };
 
     window.render5Panel = function (cfg) {
@@ -223,42 +320,42 @@ const htmlContent = `<!DOCTYPE html>
           const viewMap = window.VIEWS || (typeof VIEWS !== 'undefined' ? VIEWS : {});
           const fn = viewMap[p.view];
           c.save();
+          c.filter = 'contrast(1.10) saturate(1.20) brightness(1.04)';
           c.translate(x + w / 2, h / 2);
-          c.scale(1.02, 1.02);
+          c.scale(1.15, 1.15);
           c.translate(-(p.focusX || 640), -360);
           if (fn) fn(c, p.lt || 1.2, sc);
-          else { c.fillStyle = '#18181B'; c.fillRect(0, 0, 1280, 720); }
+          else { c.fillStyle = '#F5E6C8'; c.fillRect(0, 0, 1280, 720); }
           c.restore();
         });
       });
 
-      c.strokeStyle = '#B91C1C'; c.lineWidth = 4;
+      c.strokeStyle = '#18181B'; c.lineWidth = 6;
       for (let i = 1; i < 5; i++) { c.beginPath(); c.moveTo(i * pw, 0); c.lineTo(i * pw, ph); c.stroke(); }
 
       const bgGrad = c.createLinearGradient(0, 470, 0, 770);
-      bgGrad.addColorStop(0, 'rgba(0,0,0,0)'); bgGrad.addColorStop(0.55, 'rgba(0,0,0,0.88)'); bgGrad.addColorStop(1, '#000000');
+      bgGrad.addColorStop(0, 'rgba(24,24,27,0)'); bgGrad.addColorStop(0.55, 'rgba(24,24,27,0.88)'); bgGrad.addColorStop(1, '#18181B');
       c.fillStyle = bgGrad; c.fillRect(0, 470, 1920, 610);
 
       cfg.panels.slice(0, 5).forEach((p, i) => {
         const cx = i * pw + pw / 2, ly = 605;
-        const lblSz = fitTextSize(c, p.label, pw - 96, 22, 14, 700);
-        c.font = '700 ' + lblSz + 'px "Kanit"';
+        const lblSz = fitTextSize(c, p.label, pw - 96, 22, 14, 800);
+        c.font = '800 ' + lblSz + 'px "Kanit"';
         const tw = c.measureText(p.label).width, totalW = 40 + 12 + tw + 24, sx = cx - totalW / 2;
-        c.fillStyle = 'rgba(15,15,18,0.92)'; rr(c, sx, ly - 30, totalW, 44, 8); c.fill();
-        c.fillStyle = '#DC2626'; rr(c, sx + 4, ly - 26, 36, 36, 6); c.fill();
-        txt(c, p.num, sx + 22, ly + 1, 22, '#FFFFFF', 700, 'center');
-        txt(c, p.label, sx + 50, ly + 1, lblSz, '#F5EFE6', 700, 'left');
+        c.fillStyle = '#FFFDF9'; rr(c, sx, ly - 30, totalW, 44, 10); c.fill();
+        c.strokeStyle = '#18181B'; c.lineWidth = 3; rr(c, sx, ly - 30, totalW, 44, 10); c.stroke();
+        c.fillStyle = '#FACC15'; rr(c, sx + 4, ly - 26, 36, 36, 6); c.fill();
+        txt(c, p.num, sx + 22, ly + 1, 22, '#18181B', 900, 'center');
+        txt(c, p.label, sx + 50, ly + 1, lblSz, '#18181B', 800, 'left');
       });
 
-      const titleSz = fitTextSize(c, cfg.title, 1780, 98, 52, 900);
-      c.save(); c.shadowColor = 'rgba(220,38,38,0.85)'; c.shadowBlur = 42;
-      txt(c, cfg.title, 960, 815, titleSz, '#F5EFE6', 900, 'center'); c.restore();
-      txt(c, cfg.title, 960, 815, titleSz, '#F5EFE6', 900, 'center');
-      txt(c, cfg.subtitleEn, 960, 886, fitTextSize(c, cfg.subtitleEn, 1740, 26, 16, 600), '#D6D3D1', 600, 'center');
+      drawComicHeadline(cfg.mainHook || cfg.title, 960, 815, 1780, 106, 56);
+      txt(c, cfg.subtitleEn, 960, 886, fitTextSize(c, cfg.subtitleEn, 1740, 26, 16, 600), '#E5E7EB', 600, 'center');
 
-      c.fillStyle = '#991B1B'; rr(c, 160, 932, 460, 82, 14); c.fill();
-      txt(c, cfg.pillLabel, 390, 986, fitTextSize(c, cfg.pillLabel, 420, 34, 22, 700), '#FFFFFF', 700, 'center');
-      txt(c, cfg.hookQuote, 1240, 986, fitTextSize(c, cfg.hookQuote, 1140, 34, 20, 700), '#FACC15', 700, 'center');
+      c.fillStyle = '#FACC15'; rr(c, 160, 932, 460, 82, 14); c.fill();
+      c.strokeStyle = '#18181B'; c.lineWidth = 4; rr(c, 160, 932, 460, 82, 14); c.stroke();
+      txt(c, cfg.seriesBadge || cfg.pillLabel, 390, 986, fitTextSize(c, cfg.seriesBadge || cfg.pillLabel, 420, 34, 22, 900), '#18181B', 900, 'center');
+      txt(c, cfg.hookQuote, 1240, 986, fitTextSize(c, cfg.hookQuote, 1140, 34, 20, 700), '#FFFFFF', 700, 'center');
     };
   </script>
 </body>

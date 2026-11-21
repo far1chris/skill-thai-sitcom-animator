@@ -1,61 +1,49 @@
 // =============================================================================
 //  episode.js — Starter Thai Adult Sitcom & Everyday Social Comedy Template
 //  Part of skill: thai-sitcom-animator
-//  Showcases the exact reference image scene (Ton riding his commuter bicycle
-//  past the COFFEE & BAKERY shop), hipster menu sticker shock, office LINE group
-//  chaos, and deadpan Thai comedic punchlines.
+//  Default Structure: Event Cuts (`45-60s`/event via `eventId`/`eventTitle`) or Standalone
+//  1-Clip Story (`act: 1`, 45-60s). If a 2-part story is used (`maxEp = 2`), mark Part 2's
+//  opener with `act: 2, isRecap: true` and summarize the previous beat in 3s ("ความเดิม...").
+//
+//  Optional Shorts Header Overrides (NO leading "EP 1:", "เหตุการณ์ #1:", or pills/stamps):
+//    shortsTitle   : string or [titleTop, titleBot] — short 2-line punchy title
+//    titleRedLine  : 1 | 2 — which line renders in Red (#EF4444) vs White (#FFFFFF)
+//    eventId       : optional scene grouping key for 45-60s event-cut Shorts
+//    eventTitle    : optional short title for that event cut
 // =============================================================================
 
-const TITLE = 'เมื่ออยากใช้ชีวิตสโลว์ไลฟ์ แต่เงินในบัญชีบอกให้ปั่นไปทำงาน';
+const TITLE = 'กาแฟ 145 เงินเหลือ 142?! | ซิตคอมมนุษย์ออฟฟิศ';
 const SUBTITLE = 'Thai Adult Sitcom Animation · ซิตคอมชีวิตประจำวัน';
+
+const SHORTS_TITLE = ['กาแฟ 145', 'เงินเหลือ 142?!'];
+const TITLE_RED_LINE = 1;
 
 const SCENES = [
   {
-    id: 's01_morning_bike',
-    view: 'v01_morning_bike',
-    chapter: ['ตอนที่ 1', 'เช้าวันจันทร์แบบสโลว์ไลฟ์'],
-    vo: 'เช้าวันจันทร์ที่อากาศสดใส ผมตัดสินใจปั่นจักรยานแม่บ้านออกมาสูดอากาศแบบคนคูลๆ ผ่านหน้าร้านกาแฟเปิดใหม่ในซอย กลิ่นครัวซองต์หอมทะลุแมสก์ออกมาเลยครับ',
-    pad: 0.6,
-    bed: 'sunny_street',
-    sfx: [
-      { type: 'bike_bell', at: 0.3 },
-      { type: 'chat_pop', at: 1.2 }
-    ],
-    tele: {
-      day: 'วันจันทร์ต้นเดือน?',
-      time: '08:15',
-      wallet: 142,
-      wmax: 1000,
-      mood: 'ชิลล์จัด 😌',
-      label: '📍 ซอยสุขุมวิท 21 · หน้าร้าน COFFEE & BAKERY'
-    },
-    hud: {
-      type: 'chalkboard',
-      pos: 'tm',
-      at: 1.0,
-      badge: '☕ ป้ายหน้าร้าน · TODAY SPECIAL',
-      title: ['อเมริกาโน่ส้มยูซุคั่วกลาง', 'แก้วละ 145 บาท'],
-      eng: 'FRESH COFFEE & BAKERY · OPEN 8AM - 6PM'
-    }
-  },
-  {
-    id: 's02_menu_math',
+    id: 's01_peak_sticker_shock',
+    act: 1,
+    eventId: 'ev_coffee_shock',
+    eventTitle: 'กาแฟ 145 เงินเหลือ 142?!',
     view: 'v02_menu_math',
-    vo: 'พอก้มดูป้ายเมนูหน้าร้าน แก้วละร้อยสี่สิบห้าบาท แต่เปิดแอปธนาคารดูยอดเงินคงเหลือ มีอยู่ร้อยสี่สิบสองบาทห้าสิบตังค์ ขาดไปสองบาทห้าสิบ ชีวิตสโลว์ไลฟ์จบตั้งแต่ยังไม่จอดจักรยาน',
-    pad: 0.6,
+    isClimax: true,
+    coverAt: 1.4,
+    coverHeadline: ['กาแฟ 145', 'เงินเหลือ 142?!'],
+    chapter: ['เปิดคลิป 3 วิแรก · HOOK', 'วินาทีช็อตฟีลหน้าร้าน'],
+    vo: 'แก้วละร้อยสี่สิบห้าบาท แต่เปิดแอปธนาคารมาเงินเหลือร้อยสี่สิบสองบาทห้าสิบตังค์ ขาดไปสองบาทห้าสิบ แล้วสั่งไปแล้วด้วยทำไงดีครับ!',
+    pad: 0.5,
     bed: 'cafe_bossa',
     sfx: [
-      { type: 'record_scratch', at: 0.35 },
-      { type: 'cash_register', at: 1.4 },
-      { type: 'sad_trombone', at: 4.8 }
+      { type: 'record_scratch', at: 0.15 },
+      { type: 'cash_register', at: 1.2 },
+      { type: 'sad_trombone', at: 4.5 }
     ],
     tele: {
-      day: 'เช็กบิลความจริง',
+      day: 'วินาทีช็อตฟีล!',
       time: '08:17',
       wallet: 142,
       wmax: 1000,
       mood: 'ช็อตฟีล 😳',
-      label: '⚠ เงินขาดไป 2.50 บาท'
+      label: '⚠ เงินขาดไป 2.50 บาท!'
     },
     hud: {
       type: 'price_tag',
@@ -72,7 +60,37 @@ const SCENES = [
     }
   },
   {
+    id: 's02_rewind_morning_bike',
+    act: 1,
+    view: 'v01_morning_bike',
+    chapter: ['ย้อน 5 นาทีก่อน · REWIND', 'เช้าวันจันทร์แบบสโลว์ไลฟ์'],
+    vo: 'ย้อนกลับไปเมื่อห้านาทีก่อน ชีวิตผมยังดูดีอยู่เลยครับ เช้าวันจันทร์ปั่นจักรยานแม่บ้านรับลมผ่านหน้าร้านกาแฟเปิดใหม่ กะจะแวะซื้อให้ดูคูลๆ สักแก้ว',
+    pad: 0.6,
+    bed: 'sunny_street',
+    sfx: [
+      { type: 'bike_bell', at: 0.3 },
+      { type: 'chat_pop', at: 1.2 }
+    ],
+    tele: {
+      day: 'ย้อนเมื่อ 5 นาทีก่อน',
+      time: '08:12',
+      wallet: 142,
+      wmax: 1000,
+      mood: 'ชิลล์ทิพย์ 😌',
+      label: '📍 ซอยสุขุมวิท 21 · หน้าร้าน COFFEE & BAKERY'
+    },
+    hud: {
+      type: 'chalkboard',
+      pos: 'tm',
+      at: 1.0,
+      badge: '☕ ป้ายหน้าร้าน · TODAY SPECIAL',
+      title: ['อเมริกาโน่ส้มยูซุคั่วกลาง', 'แก้วละ 145 บาท'],
+      eng: 'FRESH COFFEE & BAKERY · OPEN 8AM - 6PM'
+    }
+  },
+  {
     id: 's03_office_line',
+    act: 1,
     view: 'v03_office_line',
     vo: 'ยังไม่ทันจะได้ถอนหายใจ เสียงไลน์กลุ่มออฟฟิศก็เด้งรัวๆ พี่บอสพิมพ์มาบอกว่า เช้านี้นัดประชุมด่วนตอนแปดโมงครึ่ง ใครมาสายเลี้ยงกาแฟทั้งแผนก',
     pad: 0.6,
@@ -102,6 +120,7 @@ const SCENES = [
   },
   {
     id: 's04_turbo_punchline',
+    act: 1,
     view: 'v04_turbo_punchline',
     vo: 'จากที่ปั่นกินลมชมวิวแบบพระเอกเอ็มวี ตอนนี้ต้องยืนโยกจักรยานแม่บ้านด้วยความเร็วแสง เพราะถ้าไปสายขึ้นมา ลำพังแค่กาแฟตัวเองยังไม่มีตังค์ซื้อเลยครับพี่น้อง',
     pad: 0.7,
@@ -142,3 +161,15 @@ const SCENES = [
 ];
 
 module.exports = { TITLE, SUBTITLE, SCENES };
+
+/* Optional 2-Part Sitcom Template (MAX 2 EPs — ONLY if story exceeds 60s):
+  {
+    id: 's05_part2_recap_opener',
+    act: 2,
+    isRecap: true, // Forces 0.06s Cold-Open + 0.00s subtitle for 3s recap!
+    view: 'v03_office_line',
+    vo: 'ความเดิมเมื่อกี้ เงินในบัญชีเหลือร้อยสี่สิบสองบาท แต่พี่บอสเพิ่งทวงกาแฟทั้งแผนกหน้าลิฟต์...',
+    chapter: ['ตอนจบ · RECAP 3 วิแรก', 'หนีตายห้องประชุม'],
+    ...
+  }
+*/

@@ -1,15 +1,17 @@
 // =============================================================================
 //  generate_scene_covers.js — Key-Scene Vertical Shorts Covers (1080x1920)
-//  Part of skill: reallens-horror-animator
+//  Part of skill: thai-sitcom-animator
 //  Uses shorts_planner.js to pick the highest-impact climax frame in each EP
-//  (EP 1..N, <= 58s each), verifies non-black frame luminance in Puppeteer,
-//  and composites STRICTLY Top Headline + Center Climax Frame + Bottom EP Stamp
-//  (NO speech bubbles, NO bottom text boxes!).
+//  (Event clips / Single Short, 45-60s each), crops subtitle-free focal action
+//  (HUD/Telemetry force-hidden), and composites ONLY a 2-Line Two-Tone Top Title
+//  + Full-Bleed Climax Frame. NO viewfinder frame, NO pill, NO bottom stamp
+//  (เหตุการณ์ #N / EP N / จบใน 1 คลิป), NO gradient bar.
 //
 //  Usage:
 //    node generate_scene_covers.js [--input master.mp4] [--max-sec 58] [--min-sec 22] [--allow-over-60]
 // =============================================================================
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const { execFileSync } = require('child_process');
 const { createRequire } = require('module');
@@ -80,7 +82,7 @@ function findBrowserExecutable() {
 const shortsDir = path.join(projectDir, 'shorts');
 fs.mkdirSync(shortsDir, { recursive: true });
 
-function findMasterMp4() {
+function findMasterMp4(required = true) {
   const explicit = getArg('--input', '-i');
   if (explicit) return path.resolve(projectDir, explicit);
   const preferred = ['master_hf.mp4', 'master_16x9.mp4', 'master_1440p.mp4', 'output_hf.mp4', 'output.mp4'];
@@ -97,7 +99,8 @@ function findMasterMp4() {
   }
   const anyMp4 = fs.readdirSync(projectDir).find(f => f.endsWith('.mp4') && !f.includes('shorts'));
   if (anyMp4) return path.join(projectDir, anyMp4);
-  throw new Error('Master 16:9 MP4 not found. Pass --input <path-to-master.mp4>');
+  if (required) throw new Error('Master 16:9 MP4 not found. Pass --input <path-to-master.mp4>');
+  return null;
 }
 
 const MAKE_COVERS_HTML = `<!DOCTYPE html>
@@ -160,36 +163,31 @@ const MAKE_COVERS_HTML = `<!DOCTYPE html>
 
       const img = new Image();
       img.onload = function() {
+        // Full-Screen 9:16 Scene Artwork (1080x1920) with focal alignment & vibrant sitcom boost
         ctx.save();
-        const scale = Math.max(W / img.width, H / img.height) * 1.15;
+        const scale = Math.max(W / img.width, H / img.height) * 1.06;
         const sw = img.width * scale, sh = img.height * scale;
-        ctx.drawImage(img, (W - sw) / 2, (H - sh) / 2, sw, sh);
+        const focusRatio = epData.hudBaked
+          ? Math.max(0.40, Math.min(0.60, (Number(epData.focusX) || 640) / 1280))
+          : Math.max(0.15, Math.min(0.85, (Number(epData.focusX) || 640) / 1280));
+        const drawX = img.width > img.height
+          ? Math.max(W - sw, Math.min(0, W / 2 - focusRatio * sw))
+          : (W - sw) / 2;
+        const drawY = (H - sh) / 2;
+        ctx.filter = 'contrast(1.12) saturate(1.24) brightness(1.06)';
+        ctx.drawImage(img, drawX, drawY, sw, sh);
+        ctx.filter = 'none';
 
-        const darkGrad = ctx.createLinearGradient(0, 0, 0, H);
-        darkGrad.addColorStop(0, 'rgba(6, 11, 20, 0.96)');
-        darkGrad.addColorStop(0.22, 'rgba(8, 14, 27, 0.82)');
-        darkGrad.addColorStop(0.5, 'rgba(10, 16, 30, 0.60)');
-        darkGrad.addColorStop(0.78, 'rgba(8, 14, 27, 0.86)');
-        darkGrad.addColorStop(1, 'rgba(4, 7, 13, 0.98)');
-        ctx.fillStyle = darkGrad; ctx.fillRect(0, 0, W, H);
+        // Localized Top (0..430) readability scrim — rest of 9:16 frame stays clean & full-bleed!
+        const topGrad = ctx.createLinearGradient(0, 0, 0, 430);
+        topGrad.addColorStop(0, 'rgba(24, 24, 27, 0.86)');
+        topGrad.addColorStop(0.65, 'rgba(24, 24, 27, 0.45)');
+        topGrad.addColorStop(1, 'rgba(24, 24, 27, 0)');
+        ctx.fillStyle = topGrad; ctx.fillRect(0, 0, W, 430);
         ctx.restore();
 
-        // Center Hero Frame (1020 x 574)
-        const heroY = 480, heroW = 1020, heroH = Math.round(heroW * (9 / 16)), heroX = (W - heroW) / 2;
-        ctx.save();
-        ctx.shadowColor = 'rgba(239, 68, 68, 0.55)'; ctx.shadowBlur = 40;
-        ctx.fillStyle = '#18181b'; ctx.beginPath(); ctx.roundRect(heroX, heroY, heroW, heroH, 22); ctx.fill();
-        ctx.restore();
-
-        ctx.save();
-        ctx.beginPath(); ctx.roundRect(heroX, heroY, heroW, heroH, 22); ctx.clip();
-        ctx.drawImage(img, heroX, heroY, heroW, heroH);
-        const vg = ctx.createRadialGradient(heroX + heroW / 2, heroY + heroH / 2, heroH * 0.35, heroX + heroW / 2, heroY + heroH / 2, heroW * 0.6);
-        vg.addColorStop(0, 'rgba(255, 255, 255, 0)'); vg.addColorStop(1, 'rgba(6, 11, 20, 0.65)');
-        ctx.fillStyle = vg; ctx.fillRect(heroX, heroY, heroW, heroH);
-        ctx.restore();
-
-        // Sample hero frame brightness to flag near-black renders
+        // Luminance probe across bright center art zone
+        const heroX = 36, heroY = 460, heroW = 1008, heroH = 900;
         const heroSample = ctx.getImageData(heroX + 80, heroY + 60, heroW - 160, heroH - 120).data;
         let hSum = 0, hCount = 0;
         for (let i = 0; i < heroSample.length; i += 64) {
@@ -198,40 +196,43 @@ const MAKE_COVERS_HTML = `<!DOCTYPE html>
         }
         window.__lastStats = { heroMeanLuma: hCount ? (hSum / hCount) : 0 };
 
-        ctx.strokeStyle = '#facc15'; ctx.lineWidth = 5;
-        ctx.beginPath(); ctx.roundRect(heroX, heroY, heroW, heroH, 22); ctx.stroke();
+        // NOTE: Yellow border + red corner viewfinder brackets are intentionally DISABLED (clean full-bleed art).
 
-        // Top Headline (2 lines ONLY — shrink safely inside 940px safe box)
-        ctx.textAlign = 'center';
-        const topSz = fitFont(ctx, epData.topLine, 940, 72, 30, 800);
-        ctx.fillStyle = '#ffffff'; ctx.font = '800 ' + topSz + 'px "Kanit", sans-serif';
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.95)'; ctx.shadowBlur = 26;
-        ctx.fillText(epData.topLine, W / 2, 220);
+        // Clean 2-Line Two-Tone Top Title (Red / White) ONLY — NO pill/box, NO stamp, NO gradient bar
+        const rawTop = String(epData.titleTop || epData.topLine || '').trim();
+        const rawBot = String(epData.titleBot || epData.redWord || '').trim();
+        const redLine = Number(epData.titleRedLine) === 2 ? 2 : 1;
 
-        const redSz = fitFont(ctx, epData.redWord, 940, 136, 36, 900);
-        ctx.font = '900 ' + redSz + 'px "Kanit", sans-serif';
-        ctx.lineJoin = 'round';
-        ctx.strokeStyle = '#000000'; ctx.lineWidth = Math.max(4, Math.round(redSz * 0.085)); ctx.shadowBlur = 0;
-        ctx.strokeText(epData.redWord, W / 2, 365);
-        ctx.fillStyle = '#dc2626';
-        ctx.shadowColor = 'rgba(185, 28, 28, 0.9)'; ctx.shadowBlur = 38;
-        ctx.fillText(epData.redWord, W / 2, 365);
+        function drawHeavyTitleLine(text, yCenter, isRed) {
+          if (!text) return;
+          const sz = fitFont(ctx, text, 940, 102, 46, 900);
+          ctx.save();
+          ctx.font = '900 ' + sz + 'px "Kanit", sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.lineJoin = 'round';
+          ctx.miterLimit = 2;
+          ctx.lineWidth = Math.max(12, Math.round(sz * 0.16));
+          ctx.strokeStyle = '#000000';
+          ctx.shadowColor = 'rgba(0, 0, 0, 0.92)';
+          ctx.shadowBlur = 14;
+          ctx.shadowOffsetY = 6;
+          ctx.strokeText(text, W / 2, yCenter);
+          ctx.shadowColor = isRed ? 'rgba(239, 68, 68, 0.45)' : 'rgba(0, 0, 0, 0.35)';
+          ctx.shadowBlur = 8;
+          ctx.shadowOffsetY = 0;
+          ctx.fillStyle = isRed ? '#ef4444' : '#ffffff';
+          ctx.fillText(text, W / 2, yCenter);
+          ctx.restore();
+        }
 
-        // Bottom Episode Stamp ONLY (NO speech bubble, NO text box!)
-        const badgeY = 1380;
-        ctx.font = '900 145px "Kanit", sans-serif';
-        const epText = 'EP ', numText = String(epData.ep);
-        const totalW = ctx.measureText(epText + numText).width;
-        const startX = W / 2 - totalW / 2;
-        ctx.textAlign = 'left'; ctx.fillStyle = '#ffffff';
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.95)'; ctx.shadowBlur = 24;
-        ctx.fillText(epText, startX, badgeY);
-
-        const epW = ctx.measureText(epText).width;
-        ctx.fillStyle = '#dc2626'; ctx.shadowColor = 'rgba(220, 38, 38, 0.85)'; ctx.shadowBlur = 28;
-        ctx.fillText(numText, startX + epW, badgeY);
-        ctx.fillStyle = '#dc2626'; ctx.shadowBlur = 0;
-        ctx.fillRect(W / 2 - 160, 1435, 320, 8);
+        if (rawTop && rawBot) {
+          drawHeavyTitleLine(rawTop, 236, redLine === 1);
+          drawHeavyTitleLine(rawBot, 362, redLine === 2);
+        } else if (rawTop || rawBot) {
+          drawHeavyTitleLine(rawTop || rawBot, 285, redLine === 1);
+        }
+        // NOTE: Sub-hook pill/box, bottom stamp (เหตุการณ์ #N / EP N / จบใน 1 คลิป) and gradient bar are DISABLED.
         window.__done = true;
       };
       img.src = epData.imgUrl;
@@ -242,7 +243,9 @@ const MAKE_COVERS_HTML = `<!DOCTYPE html>
 
 (async () => {
   const ffmpeg = resolveFFmpeg();
-  const inMp4 = findMasterMp4();
+  const stageHtmlPath = path.join(projectDir, 'index.html');
+  const hasStageHtml = fs.existsSync(stageHtmlPath);
+  const inMp4 = findMasterMp4(!hasStageHtml);
   const tlPath = path.join(projectDir, 'timeline.json');
   if (!fs.existsSync(tlPath)) {
     console.error('Missing timeline.json — run generate_audio.js first.');
@@ -253,38 +256,62 @@ const MAKE_COVERS_HTML = `<!DOCTYPE html>
   const cfg = fs.existsSync(cfgPath) ? JSON.parse(fs.readFileSync(cfgPath, 'utf8')) : {};
 
   const maxSec = Number(getArg('--max-sec') || cfg.maxSec || 58);
-  const minSec = Number(getArg('--min-sec') || cfg.minSec || 22);
-  const allowOver60 = hasFlag('--allow-over-60');
+  const minSec = Number(getArg('--min-sec') || cfg.minSec || 45);
+  const maxEpArg = getArg('--max-ep');
+  const maxEp = maxEpArg ? Number(maxEpArg) : (cfg.maxEp || cfg.maxEpisodes || null);
+  const format = hasFlag('--single') ? 'single' : (getArg('--format') || cfg.shortsFormat || undefined);
+  const allowOver60 = hasFlag('--allow-over-60') || Boolean(cfg.allowOver60);
+  const onlyEvents = hasFlag('--events-only');
 
   const { planShortsEpisodes, saveShortsPlan } = loadPlanner();
-  const planned = planShortsEpisodes(tl, cfg, { maxSec, minSec, allowOver60 });
+  const planned = planShortsEpisodes(tl, cfg, { maxSec, minSec, maxEp, allowOver60, format });
   saveShortsPlan(projectDir, planned);
 
+  const selected = onlyEvents ? planned.filter(item => item.isEvent) : planned;
   const manualCovers = Array.isArray(cfg.covers) ? cfg.covers : [];
-  const episodes = planned.map((item, idx) => {
-    const manual = manualCovers[idx] || {};
+  const episodes = selected.map((item, idx) => {
+    const manual = (!onlyEvents && manualCovers[idx]) ? manualCovers[idx] : {};
+    const exTs = Number(manual.extractAt != null ? manual.extractAt : item.extractAt);
+    let segFocusX = item.focusX || 640;
+    if (Array.isArray(item.segments)) {
+      const segHit = item.segments.find(sg => exTs >= sg.start && exTs <= sg.start + sg.dur);
+      if (segHit && segHit.focusX != null) segFocusX = segHit.focusX;
+    }
+    const isStandalone = Boolean(item.isStandalone || item.isSingle || planned.length === 1);
+    const tag = item.tag || (item.isEvent ? `event_${String(item.ep).padStart(2, '0')}` : (isStandalone ? 'shorts' : `ep${item.ep}`));
     return {
       ep: item.ep,
+      totalEps: planned.length,
+      tag,
+      isStandalone,
+      isEvent: Boolean(item.isEvent),
       start: item.start,
       end: item.end,
       dur: item.dur,
       keySceneId: item.keySceneId,
       keyView: item.keyView,
       keyScore: item.keyScore,
-      extractAt: Number(manual.extractAt != null ? manual.extractAt : item.extractAt),
+      focusX: manual.focusX != null ? manual.focusX : segFocusX,
+      isFinal: item.isFinal !== undefined ? item.isFinal : (!item.isEvent && item.ep === planned.length && planned.length > 1),
+      extractAt: exTs,
+      titleTop: manual.titleTop || item.titleTop || manual.topLine || item.topLine,
+      titleBot: manual.titleBot || item.titleBot || manual.redWord || item.redWord,
+      titleRedLine: manual.titleRedLine || item.titleRedLine || 1,
       topLine: manual.topLine || item.topLine,
       redWord: manual.redWord || item.redWord,
-      rawImg: manual.rawImg || path.join(shortsDir, `raw_frame_ep${item.ep}.png`),
-      outFile: manual.outFile || path.join(shortsDir, item.coverFile || `cover_shorts_ep${item.ep}.png`)
+      rawImg: manual.rawImg || path.join(shortsDir, `raw_frame_${tag}.png`),
+      outFile: manual.outFile || path.join(shortsDir, item.coverFile || (isStandalone ? 'cover_shorts.png' : `cover_${tag}.png`))
     };
   });
 
   const htmlFile = path.join(shortsDir, '_make_covers.html');
   fs.writeFileSync(htmlFile, MAKE_COVERS_HTML, 'utf8');
+  const tmpProfileDir = fs.mkdtempSync(path.join(os.tmpdir(), 'p_cov_'));
   const executablePath = findBrowserExecutable();
   const browser = await puppeteer.launch({
     ...(executablePath ? { executablePath } : {}),
     headless: 'new',
+    userDataDir: tmpProfileDir,
     args: ['--no-sandbox', '--disable-gpu', '--allow-file-access-from-files']
   });
 
@@ -294,7 +321,50 @@ const MAKE_COVERS_HTML = `<!DOCTYPE html>
     await page.goto('file:///' + htmlFile.replace(/\\/g, '/'), { waitUntil: 'load' });
     await page.evaluate(() => document.fonts.ready);
 
-    console.log(`=== 1. Extracting Key-Scene Climax Frames (${episodes.length} EPs, <= ${allowOver60 ? maxSec : Math.min(maxSec, 60)}s each) ===`);
+    let scenePage = null;
+    if (hasStageHtml) {
+      scenePage = await browser.newPage();
+      await scenePage.setViewport({ width: 1080, height: 1920, deviceScaleFactor: 1 });
+      await scenePage.goto('file:///' + stageHtmlPath.replace(/\\/g, '/') + '?shorts=1', { waitUntil: 'load' });
+      await scenePage.evaluate(async () => {
+        if (window.__setHeadless) window.__setHeadless();
+        await document.fonts.ready;
+        if (typeof window.setShortsMode === 'function') window.setShortsMode(true);
+      });
+    }
+
+    async function captureCandidateFrame(ts, destPath, focusX) {
+      if (scenePage) {
+        const b64 = await scenePage.evaluate((t, fx) => {
+          // Hard-disable ALL HUD layers (Telemetry top-right, chapter, cards, subtitles) on cover frames,
+          // even when the project's index.html predates the __HIDE_HUD guard.
+          const HUD_FNS = ['drawTele', 'drawChapter', 'drawCard', 'drawFlow', 'drawSub', 'drawHud'];
+          const saved = {};
+          for (const k of HUD_FNS) {
+            if (typeof window[k] === 'function') { saved[k] = window[k]; try { window[k] = function () {}; } catch (_) {} }
+          }
+          window.__HIDE_HUD = true;
+          window.__SHORTS_FOCUS_X = fx;
+          try {
+            window.renderAtTime(t);
+            const stage = document.getElementById('stage');
+            return stage ? stage.toDataURL('image/png') : null;
+          } finally {
+            window.__HIDE_HUD = false;
+            window.__SHORTS_FOCUS_X = null;
+            for (const k of Object.keys(saved)) { try { window[k] = saved[k]; } catch (_) {} }
+          }
+        }, ts, focusX);
+        if (b64) {
+          fs.writeFileSync(destPath, Buffer.from(b64.slice(b64.indexOf(',') + 1), 'base64'));
+          return 'stage';
+        }
+      }
+      execFileSync(ffmpeg, ['-y', '-ss', String(ts), '-i', inMp4, '-frames:v', '1', '-update', '1', '-q:v', '2', destPath]);
+      return 'ffmpeg';
+    }
+
+    console.log(`=== 1. Extracting Full-Screen Key-Scene Climax Frames (${episodes.length} EPs, <= ${allowOver60 ? maxSec : Math.min(maxSec, 60)}s each) ===`);
     for (const ep of episodes) {
       const span = Math.max(0.5, ep.end - ep.start);
       const candidates = [
@@ -307,7 +377,7 @@ const MAKE_COVERS_HTML = `<!DOCTYPE html>
       let bestLuma = -1;
       for (let i = 0; i < candidates.length; i++) {
         const ts = Math.max(0, candidates[i]);
-        execFileSync(ffmpeg, ['-y', '-ss', String(ts), '-i', inMp4, '-frames:v', '1', '-update', '1', '-q:v', '2', ep.rawImg]);
+        await captureCandidateFrame(ts, ep.rawImg, ep.focusX);
         const imgUrl = 'file:///' + ep.rawImg.replace(/\\/g, '/') + `?t=${Date.now()}_${i}`;
         const stats = await page.evaluate(u => window.measureImageLuma(u), imgUrl);
         if (stats.meanLuma > bestLuma) {
@@ -320,7 +390,12 @@ const MAKE_COVERS_HTML = `<!DOCTYPE html>
         }
       }
       if (chosenAt !== ep.extractAt) {
-        execFileSync(ffmpeg, ['-y', '-ss', String(chosenAt), '-i', inMp4, '-frames:v', '1', '-update', '1', '-q:v', '2', ep.rawImg]);
+        await captureCandidateFrame(chosenAt, ep.rawImg, ep.focusX);
+      }
+      if (!scenePage) {
+        // FFmpeg fallback frames have HUD baked in (Telemetry top-right) — keep the 9:16 crop near center.
+        ep.hudBaked = true;
+        console.warn(`  ⚠️ EP ${ep.ep}: no index.html — frame taken from master MP4 (HUD baked in); cover crop clamped to center to hide Telemetry.`);
       }
       if (bestLuma < 8) {
         console.warn(`  ⚠️ EP ${ep.ep} best candidate frame at ${chosenAt}s still very dark (luma=${bestLuma.toFixed(1)}). Check visual output!`);
@@ -328,6 +403,8 @@ const MAKE_COVERS_HTML = `<!DOCTYPE html>
       ep.extractAt = chosenAt;
       console.log(`✓ EP ${ep.ep}: extracted @ ${chosenAt}s [${ep.keySceneId}/${ep.keyView} | score=${ep.keyScore} | luma=${bestLuma.toFixed(1)}]`);
     }
+
+    if (scenePage) await scenePage.close().catch(() => {});
 
     console.log('\n=== 2. Rendering Key-Scene Shorts Covers (1080x1920) ===');
     for (const ep of episodes) {
@@ -340,11 +417,12 @@ const MAKE_COVERS_HTML = `<!DOCTYPE html>
         console.warn(`  ⚠️ Cover EP ${ep.ep} hero frame is very dark (luma=${coverStats.heroMeanLuma.toFixed(1)}).`);
       }
       await page.screenshot({ path: ep.outFile, type: 'png' });
-      console.log(`  -> Saved ${path.basename(ep.outFile)} ("${ep.topLine} / ${ep.redWord}")`);
+      console.log(`  -> Saved ${path.basename(ep.outFile)} ("${ep.titleTop || ep.topLine} / ${ep.titleBot || ep.redWord}")`);
     }
   } finally {
     await browser.close();
     try { fs.unlinkSync(htmlFile); } catch (_) {}
+    try { fs.rmSync(tmpProfileDir, { recursive: true, force: true }); } catch (_) {}
   }
   console.log('🎉 All Key-Scene Shorts Covers Successfully Rendered!');
 })();
