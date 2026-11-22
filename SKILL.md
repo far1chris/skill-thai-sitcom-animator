@@ -9,13 +9,13 @@ description: >-
 
 # Thai Adult Cartoon Sitcom Animator (`thai-sitcom-animator`)
 
-Complete production workflow for **Adult Cartoon Sitcom Style** animations in Thai—using the **Clean Option B Hybrid Visual Standard (คลีนช่วงเล่าเรื่อง + เด้งสติกเกอร์เฉพาะตอนตบมุก)**: clean black ink outlines (`#18181B`, `2.5–3px`), warm flat-color shading, signature half-lidded deadpan sitcom eyes, shallow-DoF blurred everyday Thai urban backgrounds during setups, and **high-impact white-sticker punchline cutouts + radial comic speed-lines + `drawComicBurst()` starbursts** on comedic shock beats—built on **HyperFrames (`heygen-com/hyperframes`)** and Gemini Interactions TTS.
+Complete production workflow for **Adult Cartoon Sitcom Style** animations in Thai—using the **Clean Setup + 6-Mode Punchline Toolkit (คลีนช่วงเล่าเรื่อง + คลังท่าตบมุก 6 สไตล์ตามอารมณ์มุก)**: clean black ink outlines (`#18181B`, `2.5–3px`), warm flat-color shading, signature half-lidded deadpan sitcom eyes, shallow-DoF blurred everyday Thai urban backgrounds during setups, and **6 distinct cinematic comedy punchlines** (`punchDeadpanZoom`, `punchFreezeSpotlight`, `punchMangaImpact`, `punchEvidenceCutIn`, `punchInScenePopOut`, `punchExpectationRip`)—built on **HyperFrames (`heygen-com/hyperframes`)** and Gemini Interactions TTS.
 
-> **Clean Option B Storytelling Rule (NO Giant Top Cream HUD Cards / NO Telemetry Boxes / NO Chapter Pills):**
+> **Clean Setup & Diverse Punchline Rule (NO Giant Top Cream HUD Cards / NO One-Note VS Screens):**
 > Keep both setup and punchline frames uncluttered so **characters' facial expressions and comedic acting own 70%+ of the screen**:
 > - **ช่วงปูเรื่อง / เล่าเรื่องปกติ (Clean Setup):** ปิดกล่องข้อความสีครีมบนซ้าย (`drawCard`), Telemetry บนขวา (`drawTele`), และป้าย `drawChapter` ทิ้งทั้งหมด (ปิดเป็นค่าเริ่มต้นแล้วใน `core.js` และห้ามใส่ `chapter:`, `tele:`, `hud:` ใน `episode.js`) ให้ใช้ `blurLayer(c, 2.0, ...)` เบลอฉากหลังนุ่มๆ แล้ววางตัวละครไซซ์ใหญ่ (`scale 1.38–1.58`) นั่งหลังโต๊ะ/ถือพร็อพในโลกจริง (ห้ามใส่ขอบสติกเกอร์ขาวช่วงปูเรื่อง เพื่อให้เชื่อมกับโต๊ะ/วัตถุได้เนียน 100%)
-> - **ช่วงตบมุก / ช็อตฟีล (Sticker Punchline Cut):** ใช้ `cameraRig` ซูมกระแทก (`snapAt`) สลับฉากเข้า `drawPunchlineBackdrop()`, วาดตัวละคร Close-Up (`scale 1.9–2.3`) ด้วย `drawStickerPerson()` (ขอบขาว + เงาตกกระทบ) + ท่าฮาๆ (`posePanic`, `poseFacepalm`, `posePoint`) + ดาวระเบิดคอมิก `drawComicBurst()` (`"ซุปสาด!!"`, `"ขาด 2.50!!"`, `"จ๊ะเอ๋!!"`, `"หมดตัว!!"`)
-> - **มุกแชต / บทพูดสั้น:** ใช้ `drawSpeechBubble()` กะทัดรัดชี้ที่ตัวพูด หรือมือถือโคลสอัพ `hand({ phone: true })` แทนกล่องการ์ดยักษ์บังจอ!
+> - **ช่วงตบมุก / ช็อตฟีล (6-Mode Punchline Toolkit):** ห้ามตัดพื้นหลังเป็นสีส้ม-น้ำเงินสำเร็จรูป (`drawPunchlineBackdrop`) ซ้ำๆ ทุกมุก! ให้เลือกท่าตบมุกจากคลัง 6 สไตล์ใน `core.js` ให้ตรงกับอารมณ์ของมุกจริง (**ห้ามใช้โหมดเดียวกันติดกัน 2 ซีน**): `punchDeadpanZoom` (ซูมเบ้าหน้าเงียบ), `punchFreezeSpotlight` (หยุดภาพขาวดำ + สปอตไลต์), `punchMangaImpact` (ตัดฉับมังงะ + วิญญาณหลุด), `punchEvidenceCutIn` (ซูมหลักฐานมือถือ/แชต + กรอบหน้าช็อก), `punchInScenePopOut` (คงฉากจริง + สติกเกอร์ + ซับวาไรตี้), หรือ `punchExpectationRip` (ฉีกกระดาษ ที่คิด VS ความจริง)
+> - **มุกแชต / บทพูดสั้น:** ใช้ `drawSpeechBubble()` กะทัดรัดชี้ที่ตัวพูด หรือ `drawEvidencePhone()` / `hand({ phone: true })` แทนกล่องการ์ดยักษ์บังจอ และห้ามใส่อิโมจิ (`✨`, `💸`, `❌`) ใน Canvas (ใช้วาดเวกเตอร์แทนเพราะ Headless Linux/Windows อาจฟอนต์แหว่ง)!
 
 ---
 
@@ -60,25 +60,32 @@ Match the exact **Adult Cartoon Sitcom** visual aesthetic (inspired by modern We
    - Sit/crouch naturally with `withHipLean()` hip-pivoting & `clampSitArms()`: **`poseFloorSit(t)`** (`by: 72`) for sitting on floor mats/ground, **`poseSit(t, { curb: true })`** (`by: 54`) for low steps/stools, **`poseSit(t)`** (`by: 34`) for chairs/tables, **`poseSquat(t)`** (`by: 64`) for deep squats, and low grounded **`poseKneel(t)`** (`by: 58`, never for floor sitting!).
    - Expressive punchline poses: **`posePanic(t)`** (hands thrown up near face in panic), **`poseFacepalm(t)`**, **`posePoint(t)`**, plus `drawBicycle(c, x, y, s, { t, rider })`, `phone`, `coffee`, `receipt`, `creditCard`, `cash50`.
 
-### 1.2 Everyday Daylight Staging & Option B Punchline Mode (`core.js`)
-Never use dark horror fog or clutter scenes with giant top cream HUD cards. Pair **blurred clean setups** with **high-contrast sticker punchlines**:
-1. **`streetCafeStage(c, t, o)` / `officeStage(c, t, o)` / `roomInteriorStage(c, t, o)` / `splitChatStage(c, t, leftFn, rightFn)`:** Wrap the static background layer inside `blurLayer(c, 1.8..2.4, ...)` during setups so foreground `drawSitcomPerson()` characters & foreground tables pop cleanly with depth of field.
-2. **Option B Punchline Kit (`drawPunchlineBackdrop`, `drawStickerPerson`, `drawComicBurst`, `drawSpeechBubble`):**
-   - `drawPunchlineBackdrop(c, t, o)`: Diagonal comic split gradient (`leftBg` vs `rightBg`) + radial speed-lines (`drawSpeedLines`) + electric lightning bolt crack.
-   - `drawStickerPerson(c, x, y, s, opts, borderR, overlayFn)`: Renders `drawSitcomPerson` (+ optional `overlayFn` soup stains/props inside the silhouette) with an aspect-compensated white sticker border + drop shadow (`16:9` & `9:16 SHORTS_MODE` safe!). Reserve sticker borders **strictly for punchline/shock beats**—never during normal setups where characters sit behind tables.
-   - `drawComicBurst(c, cx, cy, label, o)`: Jagged white+yellow comic starburst + bold Kanit 900 punchword (`"ซุปสาด!!"`, `"ขาด 2.50!!"`, `"สายแน่!!"`) instead of prose HUD boxes.
-   - `drawSpeechBubble(c, x, y, text, o)`: Compact (`<= 340px`) in-world dialogue/thought bubble pointing directly at the character.
+### 1.2 Everyday Daylight Staging & 6-Mode Punchline Toolkit (`core.js`)
+Never use dark horror fog, clutter scenes with giant top cream HUD cards, or repeat generic orange-blue VS backdrops every punchline. Pair **blurred clean setups** with the **6-Mode Punchline Toolkit** (`16:9` & `9:16 SHORTS_MODE` safe):
+1. **Clean Setup Stages:** **`streetCafeStage(c, t, o)` / `officeStage(c, t, o)` / `roomInteriorStage(c, t, o)` / `splitChatStage(c, t, leftFn, rightFn)`** — wrap static backgrounds inside `blurLayer(c, 1.8..2.4, ...)` during setups so un-bordered foreground characters (`drawSitcomPerson`) and furniture pop naturally with shallow DoF. Pass **`gloom: 0.52`** on any character for clipped forehead dread lines (zero rectangular artifacts outside hair!).
+2. **No Back-to-Back Punchline Repeat Rule:** **ห้ามใช้โหมดตบมุกแบบเดียวกันติดกัน 2 ซีน** และห้ามใช้ `drawPunchlineBackdrop` ซ้ำซาก — เลือกใช้จากตาราง 6 โหมดด้านล่างให้ตรงกับอารมณ์ของมุก:
 
-> **Dynamic Sitcom Camera & Motion Rule:** Never leave a scene static for `> 3s` and never repeat the exact same framing for `> 2` consecutive scenes. Wrap views with `cameraRig(c, lt, s.dur, { zoomFrom: 1.0, zoomTo: 1.04, snapAt, shakeAt })` so setups gently push in and punchline cuts snap-zoom (`1.12x–1.16x`) synced with comedic SFX.
+| อารมณ์มุก (Comedy Mood) | ฟังก์ชันใน `core.js` | จุดเด่นภาพ & แอ็กติง | เสียงเอฟเฟกต์ (`s.sfx`) ที่เข้าคู่ | ใช้ตอนไหน |
+| :--- | :--- | :--- | :--- | :--- |
+| **1. ช็อตฟีลเงียบ / หน้าตาย** | `punchDeadpanZoom(c, lt, o)` | Close-up หน้าตัวละครเบ้อเร่อในฉากจริง + `gloom` หน้าผาก + จุดไข่ปลา `• • •` เด้งเรียง | `cricket`, `vine_boom` | มุกเอือมระอา เดดแอร์ เพื่อนพูดปั่นแล้วเงียบกริบ |
+| **2. ซวยคาที่ / พลาดกลางอากาศ** | `punchFreezeSpotlight(c, lt, o)` | ค้างเฟรมทั้งฉากเป็นขาวดำ + เจาะ **Spotlight** สีสดเฉพาะจุดพัง + ลูกศรชี้ป้ายเหลือง | `record_scratch`, `sad_trombone` | มุกซวยสดๆ (คว่ำ/โอนผิด/เปิดประตูผิด) พากย์ย้อนจังหวะพลาด |
+| **3. ช็อกสุดขีด / หักมุมแรง** | `punchMangaImpact(c, lt, o)` | Flash ขาวดำ 2 เฟรม + เส้นสปีดมังงะ (`drawMangaFocusLines`) + Dutch angle + วิญญาณหลุด (`drawSoulEscape`) + `ช็อก!!` | `vine_boom`, `boing` | มุกตกใจสุดขีด โดนด่าจุก ยอดเงินหายวับ |
+| **4. แฉหลักฐาน / แอป / บิล** | `punchEvidenceCutIn(c, lt, o)` | โชว์จอมือถือ `drawEvidencePhone()` กลาง/ซ้าย + 2 กรอบคอมิก `drawComicInset()` ใบหน้าช็อกเทียบหน้านิ่ง | `cash_register`, `line_ping` | มุกโอนเงินไม่พอ แชตอ่านไม่ตอบ บิลยาว สั่งของไม่ตรงปก |
+| **5. จังหวะเร็ว / ป๊อปในฉากเดิม** | `punchInScenePopOut(c, lt, o)` | **เก็บฉากจริงไว้** + เด้งตัวละครขอบสติกเกอร์ขาว (`drawStickerPerson`) + ตัวหนังสือวาไรตี้ 3D (`drawVarietyPopText`) | `rimshot`, `boing` | มุกโต้เถียงไวๆ ปั่นหนีตาย ที่ยังต้องเห็นบริบทฉากเดิม |
+| **6. ที่คิด VS ความจริง** | `punchExpectationRip(c, lt, o)` | ฉีกกระดาษกลางจอ ซ้ายสว่างใสมีประกาย (`drawSparkleVec`) เทียบขวาซีดโทรม + ป้ายเวกเตอร์ | `slide_whistle`, `sad_trombone` | มุกฝันหวาน vs ชีวิตจริงพัง (แผนวันหยุด, เงินเดือน, คาเฟ่) |
+
+3. **Supporting Helpers:** `drawSpeechBubble(c, x, y, text, o)` (compact in-world dialogue bubble), `drawVarietyPopText(c, cx, cy, mainText, o)` (variety/manga kinetic headline), `drawEvidencePhone(c, cx, cy, o)` (tilted banking/app proof screen), plus legacy `drawComicBurst()` / `drawPunchlineBackdrop()` when needed. Always use vector shapes (`drawSparkleVec`) instead of unicode emojis so text never breaks across OSes.
+
+> **Dynamic Sitcom Camera & Motion Rule:** Never leave a scene static for `> 3s` and never repeat the exact same framing for `> 2` consecutive scenes. Wrap views with `cameraRig(c, lt, s.dur, { zoomFrom: 1.0, zoomTo: 1.04, snapAt, shakeAt })` so setups gently push in and punchline cuts snap-zoom (`1.08x–1.16x`) synced with comedic SFX.
 
 ---
 
 ## 2. Thai Sitcom Comedy Structure & Frameless Punchline Visuals
 
-Read [`references/sitcom-visual-and-comedy-guide.md`](./references/sitcom-visual-and-comedy-guide.md) for full schemas. Tell every joke visually using the **Inverted Peak-First 4-Beat Thai Comedy Formula**, **Option B Sticker Punchlines**, and frameless `drawSub` subtitles (**top cream HUD cards `drawCard` and `drawTele` are disabled by default**):
+Read [`references/sitcom-visual-and-comedy-guide.md`](./references/sitcom-visual-and-comedy-guide.md) for full schemas. Tell every joke visually using the **Inverted Peak-First 4-Beat Thai Comedy Formula**, **6-Mode Punchline Toolkit**, and frameless `drawSub` subtitles (**top cream HUD cards `drawCard` and `drawTele` are disabled by default**):
 
 ### 2.1 The Event-Cut / Inverted 4-Beat Sitcom Gag Formula (`45–60s` ต่อเหตุการณ์ หรือจบใน 1 คลิป — ไม่เกิน 2 ตอน)
-1. **Beat 1 — Zero-Delay 3-Second Peak / Anomaly Hook (`0.06s` Lead, `t0 = 0.00s` Sub):** เปิดคลิปด้วยวินาทีช็อตฟีลสุดขีดทันทีใน 3 วิแรก (`COLD_OPEN_LEAD = 0.06s` + `t0 = 0.000s` ซับกระชับ `<= 24–26` ตัวอักษร + Sticker Punchline snap-cut & `drawComicBurst()`)
+1. **Beat 1 — Zero-Delay 3-Second Peak / Anomaly Hook (`0.06s` Lead, `t0 = 0.00s` Sub):** เปิดคลิปด้วยวินาทีช็อตฟีลสุดขีดทันทีใน 3 วิแรก (`COLD_OPEN_LEAD = 0.06s` + `t0 = 0.000s` ซับกระชับ `<= 24–26` ตัวอักษร + ตัดเข้าหนึ่งใน 6 ท่าตบมุก เช่น `punchEvidenceCutIn` / `punchMangaImpact` / `punchFreezeSpotlight`)
 2. **Beat 2 — Rewind & Context Setup (ย้อนเล่าที่มาแบบคลีน):** ตัดกลับมาช่วงปูเรื่อง **Clean Setup** (ฉากหลังเบลอเบาๆ ไม่มีขอบสติกเกอร์ ไม่มีกรอบข้อความบังหน้า) ให้ตัวละครแสดงแอ็กติงธรรมชาติเพื่อดึง Avg View Duration ขึ้น **`30–45 วินาที`**
 3. **Beat 3 — Escalation & Social Trigger (`splitChatStage` + `drawSpeechBubble` + `exprAt`):** ขยายความป่วนด้วยแชต `splitChatStage` คู่บับเบิลคำพูดกะทัดรัด และ `exprAt` เปลี่ยนหน้าชิลล์เป็นหน้าเหวอตรงจังหวะเสียง
 4. **Beat 4 — Standalone Event-Cut / Punchline Ending (`45–60s` ต่อเหตุการณ์):**
@@ -87,11 +94,7 @@ Read [`references/sitcom-visual-and-comedy-guide.md`](./references/sitcom-visual
    - **High-Retention Ending & 2s Silent Visual CTA:** **ห้ามพูดขอไลก์/แชร์/ซับใน 3 วินาทีสุดท้าย** (`"ฝากกดไลก์ กดแชร์ กดติดตาม..."` เพราะจะทำให้คนดูปัดหนีทันที) ให้ปิดด้วย **(1) คำถามเลือกข้างจากในเรื่อง** (เช่น *"ถ้าเป็นคุณ โดนทักไลน์ตอน 17:59 จะอ่านไม่ตอบ หรือแกล้งสลบคาโต๊ะดีครับ?"*), **(2) ปมค้างคา 1 ประโยค / สะพานเชื่อมคลิปยาวหน้าช่อง**, และ **`drawShortsEndingCTA`** ที่ขึ้นป้าย + ลูกศรชี้ลง `▼` อัตโนมัติในช่วง 2.25 วินาทีสุดท้าย!
 
 ### 2.2 Visual Comedy Tools vs. Disabled Heavy HUD Cards
-- **Recommended In-Scene Visuals:**
-  - `drawComicBurst(c, cx, cy, label)`: ดาวระเบิดคำตบมุกสั้นๆ (`"ซุปสาด!!"`, `"หมดตัว!!"`, `"ขาด 2.50!!"`)
-  - `drawSpeechBubble(c, x, y, text, o)`: บับเบิลคำพูดขนาดกะทัดรัดตรงหัวคนพูด
-  - `hand(c, x, y, ang, s, { phone: true, receipt: true })`: จอมือถือ/ใบเสร็จโคลสอัพในมือตัวละครจริง
-  - `splitChatStage(c, t, leftFn, rightFn)`: ฉากแบ่งครึ่งสายฟ้าสำหรับมุกเทียบ *"สิ่งที่คิด vs ความเป็นจริง"* หรือโต้ตอบข้ามสถานที่
+- **6-Mode Punchline Toolkit (Recommended):** `punchDeadpanZoom`, `punchFreezeSpotlight`, `punchMangaImpact`, `punchEvidenceCutIn`, `punchInScenePopOut`, `punchExpectationRip`, paired with `drawSpeechBubble`, `drawVarietyPopText`, `drawEvidencePhone`, `drawComicBurst`, and `splitChatStage`.
 - **Disabled by Default (`__ENABLE_SITCOM_HUD` / `__ENABLE_SITCOM_TELE` / `__ENABLE_SITCOM_CHAPTER` off):** กล่องข้อความสีครีมใหญ่ด้านบน (`drawCard`), Telemetry มุมขวาบน (`drawTele`), และป้าย `drawChapter` ถูกปิดเป็นค่าเริ่มต้น เพื่อไม่ให้บังตัวละครและกินพื้นที่จอ 40% เหมือนสไลด์บรรยายครับ
 
 ### 2.3 การตั้งชื่อคลิปและ Shorts SEO: เอาชื่อคลิปขึ้นหน้าสุด (ห้ามนำหน้าด้วย `EP` / `จบในคลิป:`) + `<= 38–45` ตัวอักษร + `| ชื่อซีรีส์`

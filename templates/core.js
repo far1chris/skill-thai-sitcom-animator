@@ -177,9 +177,13 @@ const _tc = _tmp ? _tmp.getContext('2d') : null;
 function blurLayer(c, px, fn, extra = '') {
   if (!_tc) { fn(c); return; }
   const wasShortsWorld = _inShortsWorld;
-  _inShortsWorld = false;
-  _tc.setTransform(1, 0, 0, 1, 0, 0); _tc.clearRect(0, 0, W, H); fn(_tc);
-  _inShortsWorld = wasShortsWorld;
+  const wasShortsRig = _inShortsRig;
+  _inShortsRig = false;
+  try {
+    _tc.setTransform(1, 0, 0, 1, 0, 0); _tc.clearRect(0, 0, W, H); fn(_tc);
+  } finally {
+    _inShortsRig = wasShortsRig;
+  }
   c.save();
   if (!wasShortsWorld) c.setTransform(1, 0, 0, 1, 0, 0);
   c.filter = `blur(${px}px) ${extra}`; c.drawImage(_tmp, 0, 0); c.restore();
@@ -752,6 +756,27 @@ function drawSitcomUpperBody(c, K, o, P, thin = 1) {
       c.fillStyle = '#7DD3FC'; c.strokeStyle = '#0284C7'; c.lineWidth = 1.6;
       c.beginPath(); c.moveTo(10 + fx, 4); c.quadraticCurveTo(15 + fx, 12, 10 + fx, 15);
       c.quadraticCurveTo(5 + fx, 12, 10 + fx, 4); c.fill(); c.stroke();
+    }
+
+    // Clipped upper-forehead anime/sitcom dread shadow + vertical gloom lines (never spills outside head/hair)
+    if (o.gloom) {
+      const gAlpha = typeof o.gloom === 'number' ? o.gloom : 0.52;
+      c.save();
+      rr(c, -23.5, -32.5, 47, 61, 20);
+      c.clip();
+      const gGrad = c.createLinearGradient(0, -24, 0, -4);
+      gGrad.addColorStop(0, rgba('#0F172A', gAlpha));
+      gGrad.addColorStop(1, rgba('#0F172A', 0));
+      c.fillStyle = gGrad;
+      c.fillRect(-24, -26, 48, 24);
+      c.strokeStyle = rgba('#0F172A', Math.min(0.84, gAlpha + 0.14));
+      c.lineWidth = 1.3; c.lineCap = 'round';
+      for (let gi = -3; gi <= 3; gi++) {
+        const lx = gi * 5.6;
+        const len = 12 + (Math.abs(gi) % 2) * 5;
+        c.beginPath(); c.moveTo(lx, -22); c.lineTo(lx, -22 + len); c.stroke();
+      }
+      c.restore();
     }
 
     // Thick Expressive Eyebrows
@@ -1531,6 +1556,664 @@ function drawSpeechBubble(c, x, y, text, o = {}) {
   txt(c, text, 0, by + bh / 2 + fittedSz * 0.34, fittedSz, o.col || INK_OUTLINE, 700, 'center');
   endShortsRigComp(_rc);
   c.restore();
+}
+
+// --------------------------------------------------------- 6-MODE SITCOM PUNCHLINE TOOLKIT
+// Reusable offscreen buffers for freeze-frame, pop-out tilt, and paper-rip punchline modes
+const _freezeOff = typeof document !== 'undefined' ? document.createElement('canvas') : null;
+const _popOff = typeof document !== 'undefined' ? document.createElement('canvas') : null;
+const _ripOff = typeof document !== 'undefined' ? document.createElement('canvas') : null;
+if (_freezeOff) { _freezeOff.width = W; _freezeOff.height = H; }
+if (_popOff) { _popOff.width = W; _popOff.height = H; }
+if (_ripOff) { _ripOff.width = W; _ripOff.height = H; }
+const _freezeCtx = _freezeOff ? _freezeOff.getContext('2d') : null;
+const _popCtx = _popOff ? _popOff.getContext('2d') : null;
+const _ripCtx = _ripOff ? _ripOff.getContext('2d') : null;
+
+function _captureOffscreen(offCtx, drawFn) {
+  if (!offCtx || typeof drawFn !== 'function') return false;
+  const wasShortsRig = _inShortsRig;
+  _inShortsRig = false;
+  try {
+    offCtx.setTransform(1, 0, 0, 1, 0, 0);
+    offCtx.clearRect(0, 0, W, H);
+    drawFn(offCtx);
+    return true;
+  } finally {
+    _inShortsRig = wasShortsRig;
+  }
+}
+
+function drawForeheadGloom(c, feetX, feetY, s = 1, alpha = 0.56) {
+  c.save();
+  c.translate(feetX, feetY);
+  const _rc = applyShortsRigComp(c);
+  c.scale(s, s);
+  c.translate(0, -192);
+  rr(c, -23.5, -32.5, 47, 61, 20);
+  c.clip();
+  const gGrad = c.createLinearGradient(0, -24, 0, -4);
+  gGrad.addColorStop(0, rgba('#0F172A', alpha));
+  gGrad.addColorStop(1, rgba('#0F172A', 0));
+  c.fillStyle = gGrad;
+  c.fillRect(-24, -26, 48, 24);
+  c.strokeStyle = rgba('#0F172A', Math.min(0.84, alpha + 0.14));
+  c.lineWidth = 1.3; c.lineCap = 'round';
+  for (let i = -3; i <= 3; i++) {
+    const lx = i * 5.6;
+    const len = 12 + (Math.abs(i) % 2) * 5;
+    c.beginPath(); c.moveTo(lx, -22); c.lineTo(lx, -22 + len); c.stroke();
+  }
+  endShortsRigComp(_rc);
+  c.restore();
+}
+
+function drawSoulEscape(c, x, y, t = 0, s = 1) {
+  const bob = Math.sin(t * 4.2) * 5;
+  c.save();
+  c.translate(x, y + bob);
+  const _rc = applyShortsRigComp(c);
+  c.scale(s, s);
+  c.globalAlpha = 0.92;
+  c.fillStyle = '#E0F2FE';
+  c.strokeStyle = '#0284C7';
+  c.lineWidth = 3.8;
+  c.lineJoin = 'round';
+  c.beginPath();
+  c.moveTo(-46, 50);
+  c.bezierCurveTo(-18, 24, 12, -12, 50, -64);
+  c.bezierCurveTo(74, -94, 128, -92, 134, -48);
+  c.bezierCurveTo(138, -8, 96, 20, 62, 8);
+  c.bezierCurveTo(22, -2, -12, 36, -46, 50);
+  c.closePath();
+  c.fill(); c.stroke();
+  c.fillStyle = '#0369A1';
+  c.beginPath(); c.arc(88, -54, 4.8, 0, TAU); c.arc(110, -52, 4.8, 0, TAU); c.fill();
+  c.beginPath(); c.ellipse(99, -35, 6, 8, 0, 0, TAU); c.fill();
+  endShortsRigComp(_rc);
+  c.restore();
+}
+
+function drawSparkleVec(c, sx, sy, sr = 16, fillCol = '#FEF9C3', strokeCol = '#F59E0B', useComp = true) {
+  c.save();
+  c.translate(sx, sy);
+  const _rc = useComp ? applyShortsRigComp(c) : false;
+  c.fillStyle = fillCol; c.strokeStyle = strokeCol; c.lineWidth = 2; c.lineJoin = 'round';
+  c.beginPath();
+  c.moveTo(0, -sr); c.quadraticCurveTo(0, 0, sr, 0);
+  c.quadraticCurveTo(0, 0, 0, sr); c.quadraticCurveTo(0, 0, -sr, 0);
+  c.quadraticCurveTo(0, 0, 0, -sr);
+  c.fill(); c.stroke();
+  endShortsRigComp(_rc);
+  c.restore();
+}
+
+function drawMangaFocusLines(c, cx = W / 2, cy = H / 2, o = {}) {
+  const bg = c.createRadialGradient(cx, cy, 80, cx, cy, 760);
+  bg.addColorStop(0, o.innerCol || '#FFFDF9');
+  bg.addColorStop(0.68, o.midCol || '#FEF2F2');
+  bg.addColorStop(1, o.outerCol || '#FCA5A5');
+  c.fillStyle = bg;
+  c.fillRect(0, 0, W, H);
+
+  c.save();
+  c.translate(cx, cy);
+  const _rc = applyShortsRigComp(c);
+  const count = o.count || 84;
+  const rBase = o.rIn !== undefined ? o.rIn : (isShortsMode() ? 165 : 225);
+  const rOut = o.rOut || 1050;
+  for (let i = 0; i < count; i++) {
+    const a = (i / count) * TAU + (hash(i * 3.1) - 0.5) * 0.04;
+    const rIn = rBase + hash(i * 7.3) * 145;
+    const halfW = 0.007 + hash(i * 11.7) * 0.019;
+    c.fillStyle = i % 3 === 0 ? INK_OUTLINE : (i % 5 === 0 ? '#DC2626' : '#27272A');
+    c.beginPath();
+    c.moveTo(Math.cos(a) * rIn, Math.sin(a) * rIn);
+    c.lineTo(Math.cos(a - halfW) * rOut, Math.sin(a - halfW) * rOut);
+    c.lineTo(Math.cos(a + halfW) * rOut, Math.sin(a + halfW) * rOut);
+    c.closePath();
+    c.fill();
+  }
+  endShortsRigComp(_rc);
+  c.restore();
+
+  if (o.subScrim !== false) {
+    const scG = c.createLinearGradient(0, isShortsMode() ? 495 : 590, 0, H);
+    scG.addColorStop(0, 'rgba(255,253,249,0)');
+    scG.addColorStop(1, 'rgba(255,253,249,0.90)');
+    c.fillStyle = scG;
+    c.fillRect(0, isShortsMode() ? 495 : 590, W, isShortsMode() ? 225 : 130);
+  }
+}
+
+function drawVarietyPopText(c, cx, cy, mainText, o = {}) {
+  const shorts = isShortsMode();
+  const baseScale = o.scale !== undefined ? o.scale : (shorts ? 0.68 : 1.0);
+  const pop = (o.popAt !== undefined && o.t !== undefined) ? easeBack(prog(o.t, o.popAt, o.popAt + 0.16)) : 1;
+  if (pop <= 0.01) return;
+  const sc = baseScale * (0.45 + 0.55 * pop);
+  const rot = o.rot !== undefined ? o.rot : -0.075;
+  const isManga = o.variant === 'manga';
+  const maxW = o.maxW || (shorts ? 490 : 620);
+  const baseSz = o.fontSize || (isManga ? 86 : 82);
+
+  c.save();
+  c.translate(cx, cy);
+  const _rc = applyShortsRigComp(c);
+  c.rotate(rot);
+  c.scale(sc, sc);
+
+  if (o.tag) {
+    const tagSz = fitTextSize(c, o.tag, 250, 21, 14, 900);
+    c.font = `900 ${tagSz}px ${FONT}`;
+    const tagW = Math.max(150, Math.ceil(c.measureText(o.tag).width + 38));
+    c.fillStyle = INK_OUTLINE;
+    rr(c, -tagW / 2 + 4, -90, tagW, 46, 12); c.fill();
+    inkrr(c, -tagW / 2, -96, tagW, 46, 12, o.tagBg || '#DC2626', 3.5, '#FFFFFF');
+    txt(c, o.tag, 0, -66, tagSz, '#FFFFFF', 900, 'center');
+  }
+
+  const mainSz = fitTextSize(c, mainText, maxW, baseSz, 34, 900);
+  c.font = `900 ${mainSz}px ${FONT}`;
+  c.textAlign = 'center'; c.lineJoin = 'round';
+  const baselineY = isManga ? 0 : (o.tag ? 18 : 10);
+
+  if (isManga) {
+    c.fillStyle = INK_OUTLINE; c.fillText(mainText, 8, baselineY + 8);
+    c.lineWidth = 15; c.strokeStyle = INK_OUTLINE; c.strokeText(mainText, 0, baselineY);
+    c.lineWidth = 6; c.strokeStyle = '#FFFFFF'; c.strokeText(mainText, 0, baselineY);
+    c.fillStyle = o.col || '#EF4444'; c.fillText(mainText, 0, baselineY);
+  } else {
+    c.fillStyle = '#7F1D1D'; c.fillText(mainText, 7, baselineY + 8);
+    c.lineWidth = 16; c.strokeStyle = INK_OUTLINE; c.strokeText(mainText, 0, baselineY);
+    c.lineWidth = 7; c.strokeStyle = '#FFFFFF'; c.strokeText(mainText, 0, baselineY);
+    const tGrad = c.createLinearGradient(0, baselineY - mainSz * 0.72, 0, baselineY + 8);
+    tGrad.addColorStop(0, o.gradTop || '#FEF08A');
+    tGrad.addColorStop(1, o.gradBot || '#F97316');
+    c.fillStyle = tGrad; c.fillText(mainText, 0, baselineY);
+  }
+
+  if (o.subText) {
+    const subSz = fitTextSize(c, o.subText, maxW * 0.9, 40, 22, 900);
+    c.font = `900 ${subSz}px ${FONT}`;
+    c.lineWidth = 11; c.strokeStyle = INK_OUTLINE; c.strokeText(o.subText, 10, baselineY + 62);
+    c.fillStyle = o.subCol || '#FACC15'; c.fillText(o.subText, 10, baselineY + 62);
+  }
+
+  if (!isManga && o.sparks !== false) {
+    const hw = Math.min(maxW * 0.5, Math.ceil(c.measureText(mainText).width / 2)) + 16;
+    c.strokeStyle = '#FACC15'; c.lineWidth = 5; c.lineCap = 'round';
+    for (const [sx, sy, ex, ey] of [[-hw, -55, -hw - 35, -82], [hw, -52, hw + 36, -78], [hw + 12, 14, hw + 50, 16]]) {
+      c.beginPath(); c.moveTo(sx, sy); c.lineTo(ex, ey); c.stroke();
+    }
+  }
+
+  endShortsRigComp(_rc);
+  c.restore();
+}
+
+function drawEvidencePhone(c, cx, cy, o = {}) {
+  const shorts = isShortsMode();
+  const sc = o.scale !== undefined ? o.scale : (shorts ? 0.61 : 1.0);
+  const rot = o.rot !== undefined ? o.rot : -0.06;
+
+  c.save();
+  c.translate(cx, cy);
+  const _rc = applyShortsRigComp(c);
+  c.rotate(rot);
+  c.scale(sc, sc);
+
+  c.fillStyle = 'rgba(0,0,0,0.55)';
+  rr(c, -155 + 14, -270 + 16, 310, 540, 34); c.fill();
+  inkrr(c, -155, -270, 310, 540, 34, INK_OUTLINE, 4);
+  inkrr(c, -138, -242, 276, 486, 22, '#F8FAFC', 2.5);
+  inkrr(c, -45, -258, 90, 10, 5, '#3F3F46', 1.5);
+
+  c.fillStyle = o.headerCol || '#15803D';
+  rr(c, -138, -242, 276, 66, [20, 20, 0, 0]); c.fill();
+  txt(c, o.app || 'K-PLUS', -114, -200, 24, '#FFFFFF', 900, 'left');
+  txt(c, o.account || 'ออมทรัพย์', 114, -200, 16, '#BBF7D0', 700, 'right');
+
+  txt(c, o.subtitle || 'ยอดเงินคงเหลือที่ใช้ได้', 0, -132, 18, '#64748B', 700, 'center');
+  const amtStr = o.amount || '฿ 142.50';
+  txt(c, amtStr, 0, -56, fitTextSize(c, amtStr, 244, 56, 30, 900), o.amountCol || '#DC2626', 900, 'center');
+
+  c.fillStyle = '#E2E8F0';
+  c.fillRect(-114, -22, 228, 3);
+
+  const merchStr = o.merchant || 'ผู้รับโอน: COFFEE & BAKERY';
+  txt(c, merchStr, 0, 18, fitTextSize(c, merchStr, 240, 17, 12, 700), '#1E293B', 700, 'center');
+  txt(c, o.billLabel || 'ยอดชำระ', -108, 66, 18, '#475569', 700, 'left');
+  const billVal = o.billValue || '145.00 บาท';
+  txt(c, billVal, 108, 66, fitTextSize(c, billVal, 138, 22, 14, 900), '#0F172A', 900, 'right');
+
+  inkrr(c, -116, 102, 232, 58, 12, o.errorBg || '#FEE2E2', 2.5, o.errorCol || '#DC2626');
+  c.fillStyle = o.errorCol || '#DC2626';
+  c.beginPath(); c.arc(-92, 121, 9.5, 0, TAU); c.fill();
+  c.strokeStyle = '#FFFFFF'; c.lineWidth = 2.4; c.lineCap = 'round';
+  c.beginPath(); c.moveTo(-96, 117); c.lineTo(-88, 125); c.moveTo(-88, 117); c.lineTo(-96, 125); c.stroke();
+  const errT = o.errorTitle || 'ยอดเงินไม่เพียงพอ';
+  txt(c, errT, 12, 127, fitTextSize(c, errT, 165, 18, 12, 800), '#B91C1C', 800, 'center');
+  const errS = o.errorSub || '(ขาดอีก 2.50 บาท)';
+  txt(c, errS, 0, 150, fitTextSize(c, errS, 210, 16, 11, 800), '#DC2626', 800, 'center');
+
+  inkrr(c, -104, 182, 208, 44, 22, '#CBD5E1', 2, '#94A3B8');
+  txt(c, o.btnText || 'ยืนยันการโอน', 0, 211, 18, '#64748B', 800, 'center');
+
+  endShortsRigComp(_rc);
+  c.restore();
+}
+
+function drawComicInset(c, x, y, w, h, o = {}, drawContent) {
+  const ix = o.centered ? x : x + w / 2;
+  const iy = o.centered ? y : y + h / 2;
+  const sc = o.scale !== undefined ? o.scale : 1;
+  c.save();
+  c.translate(ix, iy);
+  const _rc = o.comp === false ? false : applyShortsRigComp(c);
+  if (o.ang) c.rotate(o.ang);
+  if (sc !== 1) c.scale(sc, sc);
+  c.fillStyle = 'rgba(0,0,0,0.62)';
+  rr(c, -w / 2 + 10, -h / 2 + 10, w, h, 16); c.fill();
+  c.beginPath(); rr(c, -w / 2, -h / 2, w, h, 16); c.closePath();
+  c.fillStyle = o.bgCol || '#FED7AA'; c.fill();
+  c.save(); c.clip();
+  if (typeof drawContent === 'function') drawContent(c, w, h);
+  c.restore();
+  c.strokeStyle = o.borderCol || '#FFFFFF'; c.lineWidth = 10; rr(c, -w / 2, -h / 2, w, h, 16); c.stroke();
+  c.strokeStyle = o.inkCol || INK_OUTLINE; c.lineWidth = 4; rr(c, -w / 2, -h / 2, w, h, 16); c.stroke();
+  endShortsRigComp(_rc);
+  c.restore();
+}
+
+// 1. Deadpan Crash Zoom (The Office / SpongeBob Gloom)
+function punchDeadpanZoom(c, lt, o = {}) {
+  const shorts = isShortsMode();
+  if (typeof o.bgFn === 'function') {
+    blurLayer(c, o.blur !== undefined ? o.blur : 5.8, (bc) => { o.bgFn(bc, lt); });
+  }
+  c.fillStyle = o.tint || 'rgba(15, 23, 42, 0.25)';
+  c.fillRect(0, 0, W, H);
+  vignette(c, 0.44, 0.42, '#090D16');
+
+  const hx = o.heroX !== undefined ? o.heroX : (shorts ? 560 : 585);
+  const hy = o.heroY !== undefined ? o.heroY : (shorts ? 585 : 918);
+  const hs = o.heroScale !== undefined ? o.heroScale : (shorts ? 2.68 : 3.58);
+  const heroOpts = {
+    t: lt,
+    cast: 'ton',
+    dir: 1,
+    lookX: 0,
+    lookY: 0.4,
+    expr: 'deadpan',
+    darkCircles: true,
+    sweat: true,
+    gloom: 0.56,
+    shadow: false,
+    pose: poseStand(lt, { arms: [{ a: 0.14, b: 0.12 }, { a: -0.1, b: 0.12 }], tilt: -0.02 }),
+    ...(o.hero || {})
+  };
+  drawSitcomPerson(c, hx, hy, hs, heroOpts);
+
+  if (o.dots !== false) {
+    const startAt = o.at !== undefined ? o.at : 0;
+    const dxBase = o.dotsX !== undefined ? o.dotsX : (shorts ? 735 : 835);
+    const dyBase = o.dotsY !== undefined ? o.dotsY : (shorts ? 225 : 248);
+    c.save();
+    c.translate(dxBase, dyBase);
+    const _rc = applyShortsRigComp(c);
+    const dScale = shorts ? 0.72 : 1.0;
+    c.scale(dScale, dScale);
+    for (let i = 0; i < 3; i++) {
+      const k = easeBack(prog(lt, startAt + i * 0.14, startAt + i * 0.14 + 0.12));
+      if (k <= 0.02) continue;
+      const cx = i * 42;
+      c.save();
+      c.translate(cx, 0);
+      c.scale(k, k);
+      c.fillStyle = INK_OUTLINE;
+      c.beginPath(); c.arc(3, 3, 11, 0, TAU); c.fill();
+      c.fillStyle = '#FFFFFF'; c.strokeStyle = INK_OUTLINE; c.lineWidth = 3.2;
+      c.beginPath(); c.arc(0, 0, 11, 0, TAU); c.fill(); c.stroke();
+      c.restore();
+    }
+    endShortsRigComp(_rc);
+    c.restore();
+  }
+}
+
+// 2. Freeze-Frame & Spotlight (Record Scratch + Grayscale + Selective Color Ring)
+function punchFreezeSpotlight(c, lt, o = {}) {
+  const freezeT = o.freezeAt !== undefined ? o.freezeAt : lt;
+  const ok = _captureOffscreen(_freezeCtx, (fc) => {
+    if (typeof o.sceneFn === 'function') o.sceneFn(fc, freezeT);
+  });
+  if (!ok) return;
+
+  c.save();
+  c.filter = 'grayscale(100%) contrast(1.06) brightness(0.58)';
+  c.drawImage(_freezeOff, 0, 0);
+  c.restore();
+
+  const shorts = isShortsMode();
+  const spotX = o.spotX !== undefined ? o.spotX : 568;
+  const spotY = o.spotY !== undefined ? o.spotY : 380;
+  const spotR = o.spotR !== undefined ? o.spotR : (shorts ? 148 : 166);
+  const rx = spotR;
+  const ry = _inShortsWorld ? spotR * (SHORTS_SX / SHORTS_SY) : spotR;
+
+  c.save();
+  c.beginPath(); c.ellipse(spotX, spotY, rx, ry, 0, 0, TAU); c.clip();
+  c.drawImage(_freezeOff, 0, 0);
+  const rim = c.createRadialGradient(spotX, spotY, rx * 0.5, spotX, spotY, rx);
+  rim.addColorStop(0, 'rgba(254, 240, 138, 0)');
+  rim.addColorStop(1, 'rgba(250, 204, 21, 0.25)');
+  c.fillStyle = rim;
+  c.fillRect(spotX - rx, spotY - ry, rx * 2, ry * 2);
+  c.restore();
+
+  c.save();
+  c.strokeStyle = '#FACC15'; c.lineWidth = 5;
+  c.beginPath(); c.ellipse(spotX, spotY, rx, ry, 0, 0, TAU); c.stroke();
+  c.restore();
+
+  if (o.label) {
+    const lx = o.labelX !== undefined ? o.labelX : (shorts ? 685 : 890);
+    const ly = o.labelY !== undefined ? o.labelY : (shorts ? 212 : 185);
+    c.save();
+    c.translate(lx, ly);
+    const _rc = applyShortsRigComp(c);
+    if (shorts) c.scale(0.78, 0.78);
+    // Comic red curved arrow pointing down-left toward spotlight
+    c.strokeStyle = '#EF4444'; c.lineWidth = 6; c.lineCap = 'round'; c.lineJoin = 'round';
+    c.beginPath(); c.moveTo(-75, 40); c.quadraticCurveTo(-158, 40, -212, 118); c.stroke();
+    c.beginPath(); c.moveTo(-214, 88); c.lineTo(-216, 122); c.lineTo(-182, 112); c.stroke();
+    const lSz = fitTextSize(c, o.label, 224, 23, 15, 900);
+    c.font = `900 ${lSz}px ${FONT}`;
+    const bw = Math.max(190, Math.ceil(c.measureText(o.label).width + 36));
+    inkrr(c, -bw / 2, -27, bw, 54, 10, '#FEF08A', 3.2, INK_OUTLINE);
+    txt(c, o.label, 0, 8, lSz, '#DC2626', 900, 'center');
+    endShortsRigComp(_rc);
+    c.restore();
+  }
+
+  if (o.badge !== false) {
+    const bText = typeof o.badge === 'string' ? o.badge : 'RECORD SCRATCH';
+    const bx = o.badgeX !== undefined ? o.badgeX : (shorts ? 620 : 480);
+    const by = o.badgeY !== undefined ? o.badgeY : (shorts ? 155 : 46);
+    c.save();
+    c.translate(bx, by);
+    const _rc = applyShortsRigComp(c);
+    if (shorts) c.scale(0.72, 0.72);
+    c.font = `800 17px ${FONT}`;
+    const pw = Math.max(210, Math.ceil(c.measureText(bText).width + 64));
+    inkrr(c, -pw / 2, -20, pw, 40, 20, 'rgba(24,24,27,0.92)', 2.5, '#FACC15');
+    c.fillStyle = '#FACC15';
+    c.fillRect(-pw / 2 + 20, -9, 5, 18); c.fillRect(-pw / 2 + 29, -9, 5, 18);
+    txt(c, bText, 12, 6, 17, '#FACC15', 800, 'center');
+    endShortsRigComp(_rc);
+    c.restore();
+  }
+}
+
+// 3. Manga Impact Cut (Focus Lines + 2-Frame Impact Flash + Dutch Angle + Soul Escape)
+function punchMangaImpact(c, lt, o = {}) {
+  const shorts = isShortsMode();
+  const focusX = o.focusX !== undefined ? o.focusX : (shorts ? 610 : 560);
+  const focusY = o.focusY !== undefined ? o.focusY : (shorts ? 360 : 335);
+
+  if (o.flash !== false && o.at !== undefined && lt >= o.at && lt < o.at + 0.075) {
+    c.fillStyle = '#09090B'; c.fillRect(0, 0, W, H);
+    drawMangaFocusLines(c, focusX, focusY, {
+      innerCol: '#18181B', midCol: '#27272A', outerCol: '#FFFFFF', count: 52, subScrim: false
+    });
+    return;
+  }
+
+  drawMangaFocusLines(c, focusX, focusY, o.focusLines || {});
+
+  const hx = o.heroX !== undefined ? o.heroX : (shorts ? 570 : 490);
+  const hy = o.heroY !== undefined ? o.heroY : (shorts ? 660 : 875);
+  const hs = o.heroScale !== undefined ? o.heroScale : (shorts ? 2.62 : 3.30);
+  const ang = o.angle !== undefined ? o.angle : -0.095;
+  const heroOpts = {
+    t: lt,
+    cast: 'ton',
+    dir: 1,
+    expr: 'shock',
+    darkCircles: true,
+    sweat: true,
+    tear: true,
+    gloom: 0.45,
+    shadow: false,
+    pose: posePanic(lt),
+    ...(o.hero || {})
+  };
+
+  if (shorts) {
+    // Rotate strictly AFTER applyShortsRigComp so non-uniform Shorts transform introduces zero shear
+    const dyLocal = (hy - focusY) * (SHORTS_SY / SHORTS_CHAR_SCALE);
+    c.save();
+    c.translate(hx, focusY);
+    const _rc = applyShortsRigComp(c);
+    c.rotate(ang);
+    drawSitcomPerson(c, 0, dyLocal, hs, heroOpts);
+    if (o.soul !== false) {
+      drawSoulEscape(c, 45 * hs, dyLocal - 197 * hs, lt, hs * 0.34);
+    }
+    endShortsRigComp(_rc);
+    c.restore();
+  } else {
+    c.save();
+    c.translate(hx + 50, 360);
+    c.rotate(ang);
+    c.translate(-(hx + 50), -360);
+    drawSitcomPerson(c, hx, hy, hs, heroOpts);
+    if (o.soul !== false) {
+      drawSoulEscape(c, hx + 45 * hs, hy - 197 * hs, lt, hs * 0.30);
+    }
+    c.restore();
+  }
+
+  drawVarietyPopText(
+    c,
+    o.textX !== undefined ? o.textX : (shorts ? 640 : 970),
+    o.textY !== undefined ? o.textY : (shorts ? 195 : 210),
+    o.sfxText || 'ช็อก!!',
+    {
+      variant: 'manga',
+      subText: o.subText,
+      rot: -0.08,
+      popAt: o.at,
+      t: lt,
+      ...(o.textOpts || {})
+    }
+  );
+}
+
+// 4. Diegetic Evidence Cut-In (Macro Proof Screen + Pure Reaction Comic Insets)
+function punchEvidenceCutIn(c, lt, o = {}) {
+  const shorts = isShortsMode();
+  if (typeof o.bgFn === 'function') {
+    blurLayer(c, o.blur !== undefined ? o.blur : 5.2, (bc) => { o.bgFn(bc, lt); });
+  }
+  c.fillStyle = o.tint || 'rgba(15, 23, 42, 0.34)';
+  c.fillRect(0, 0, W, H);
+
+  if (typeof o.evidenceFn === 'function') {
+    o.evidenceFn(c, lt, shorts);
+  } else {
+    const px = o.phoneX !== undefined ? o.phoneX : (shorts ? 630 : 405);
+    const py = o.phoneY !== undefined ? o.phoneY : (shorts ? 265 : 345);
+    drawEvidencePhone(c, px, py, o.phone || {});
+  }
+
+  const topOpts = o.topHero || {
+    t: lt, cast: 'ton', dir: -1, lookX: -2, expr: 'shock', darkCircles: true, sweat: true, tear: true, shadow: false,
+    pose: posePanic(lt)
+  };
+  const botOpts = o.bottomHero || {
+    t: lt, cast: 'barista', dir: -1, expr: 'deadpan', coffee: true, shadow: false
+  };
+
+  if (shorts) {
+    drawComicInset(c, 470, 482, 240, 200, { centered: true, scale: 0.66, ang: -0.04, bgCol: '#FED7AA' }, (ic) => {
+      drawSpeedLines(ic, 0, 0, 22, 24, 240, 'rgba(220,38,38,0.18)', lt);
+      drawSitcomPerson(ic, 12, 345, 1.85, topOpts);
+    });
+    drawComicInset(c, 785, 482, 240, 200, { centered: true, scale: 0.66, ang: 0.04, bgCol: '#CBD5E1' }, (ic) => {
+      drawSitcomPerson(ic, 8, 330, 1.78, botOpts);
+    });
+  } else {
+    drawComicInset(c, 685, 62, 470, 255, { ang: 0.045, bgCol: '#FED7AA' }, (ic) => {
+      drawSpeedLines(ic, 0, 0, 26, 30, 320, 'rgba(220,38,38,0.18)', lt);
+      drawSitcomPerson(ic, 28, 545, 2.82, topOpts);
+    });
+    drawComicInset(c, 705, 358, 450, 232, { ang: -0.035, bgCol: '#CBD5E1' }, (ic) => {
+      drawSitcomPerson(ic, 16, 520, 2.70, botOpts);
+    });
+  }
+}
+
+// 5. In-Scene Pop-Out (Keep Real Stage + Sticker Hero + Variety Kinetic Text)
+function punchInScenePopOut(c, lt, o = {}) {
+  const shorts = isShortsMode();
+  if (typeof o.bgFn === 'function') {
+    blurLayer(c, o.blur !== undefined ? o.blur : 3.0, (bc) => { o.bgFn(bc, lt); });
+  }
+  c.fillStyle = o.tint || 'rgba(15, 23, 42, 0.28)';
+  c.fillRect(0, 0, W, H);
+  const gx = o.glowX !== undefined ? o.glowX : (shorts ? 560 : 435);
+  glow(c, gx, 360, 420, o.glowCol || '#FDE047', 0.34);
+
+  if (typeof o.midFn === 'function') {
+    o.midFn(c, lt, shorts);
+  }
+
+  const hx = o.heroX !== undefined ? o.heroX : (shorts ? 555 : 435);
+  const hy = o.heroY !== undefined ? o.heroY : (shorts ? 610 : 795);
+  const hs = o.heroScale !== undefined ? o.heroScale : (shorts ? 1.85 : 2.52);
+  const heroOpts = {
+    t: lt,
+    cast: 'ton',
+    dir: 1,
+    expr: 'shock',
+    darkCircles: true,
+    sweat: true,
+    tear: true,
+    shadow: false,
+    pose: posePanic(lt),
+    ...(o.hero || {})
+  };
+
+  if (shorts) {
+    drawStickerPerson(c, hx, hy, hs, heroOpts, o.borderR || 7);
+  } else {
+    const ok = _captureOffscreen(_popCtx, (pc) => {
+      drawStickerPerson(pc, hx, hy, hs, heroOpts, o.borderR || 8);
+    });
+    if (ok) {
+      c.save();
+      c.translate(hx, 420);
+      c.rotate(o.angle !== undefined ? o.angle : -0.055);
+      c.translate(-hx, -420);
+      c.drawImage(_popOff, 0, 0);
+      c.restore();
+    }
+  }
+
+  drawVarietyPopText(
+    c,
+    o.textX !== undefined ? o.textX : (shorts ? 635 : 775),
+    o.textY !== undefined ? o.textY : (shorts ? 205 : 198),
+    o.mainText || 'ช็อตฟีล!!',
+    {
+      tag: o.tag,
+      subText: o.subText,
+      popAt: o.at,
+      t: lt,
+      ...(o.textOpts || {})
+    }
+  );
+}
+
+// 6. Expectation vs Reality Rip (Diagonal Torn Paper Split: Dreamy Left vs Desaturated Right)
+function punchExpectationRip(c, lt, o = {}) {
+  const shorts = isShortsMode();
+  const ripPts = [
+    [668, -10], [648, 55], [666, 115], [634, 180], [652, 245],
+    [622, 315], [642, 385], [610, 460], [632, 535], [598, 610], [618, 730]
+  ];
+
+  const okReal = _captureOffscreen(_ripCtx, (rc) => {
+    if (typeof o.realityFn === 'function') o.realityFn(rc, lt);
+  });
+  if (okReal) {
+    c.save();
+    c.filter = o.realityFilter || 'saturate(0.42) brightness(0.84) contrast(1.06)';
+    c.drawImage(_ripOff, 0, 0);
+    c.restore();
+  }
+  c.fillStyle = o.realityWash || 'rgba(30, 58, 138, 0.16)';
+  c.fillRect(0, 0, W, H);
+
+  c.save();
+  c.beginPath();
+  c.moveTo(0, -10);
+  for (const [rx, ry] of ripPts) c.lineTo(rx, ry);
+  c.lineTo(0, 730);
+  c.closePath();
+  c.save();
+  c.shadowColor = 'rgba(0,0,0,0.58)';
+  c.shadowBlur = 18;
+  c.shadowOffsetX = 9;
+  c.fillStyle = '#FFFFFF';
+  c.fill();
+  c.restore();
+  c.clip();
+
+  if (typeof o.expectationFn === 'function') o.expectationFn(c, lt);
+  glow(c, 360, 280, 420, '#FDE047', 0.34);
+  c.fillStyle = 'rgba(254, 240, 138, 0.14)';
+  c.fillRect(0, 0, W, H);
+  for (const [sx, sy, sr] of [[370, 215, 16], [510, 190, 19], [525, 320, 14], [385, 360, 13]]) {
+    drawSparkleVec(c, sx, sy, sr);
+  }
+  c.restore();
+
+  // Crisp jagged white torn-paper border down center ridge
+  c.save();
+  c.lineJoin = 'round'; c.lineCap = 'round';
+  c.strokeStyle = '#FFFFFF'; c.lineWidth = shorts ? 6.5 : 10;
+  c.beginPath();
+  ripPts.forEach(([rx, ry], idx) => idx === 0 ? c.moveTo(rx, ry) : c.lineTo(rx, ry));
+  c.stroke();
+  c.strokeStyle = '#CBD5E1'; c.lineWidth = 2.2;
+  c.beginPath();
+  ripPts.forEach(([rx, ry], idx) => idx === 0 ? c.moveTo(rx - 3, ry) : c.lineTo(rx - 3, ry));
+  c.stroke();
+  c.restore();
+
+  if (o.badges !== false) {
+    const lx = shorts ? 455 : 132, ly = shorts ? 165 : 53;
+    const rx = shorts ? 810 : 1138, ry = shorts ? 165 : 53;
+    const bScale = shorts ? 0.68 : 1.0;
+
+    c.save(); c.translate(lx, ly); const _rc1 = applyShortsRigComp(c); c.scale(bScale, bScale);
+    inkrr(c, -94, -23, 188, 46, 12, '#FACC15', 3, INK_OUTLINE);
+    txt(c, o.leftLabel || 'สิ่งที่คิด', -20, 8, 24, INK_OUTLINE, 900, 'center');
+    drawSparkleVec(c, 60, 0, 12, '#FFFFFF', '#B45309', false);
+    endShortsRigComp(_rc1); c.restore();
+
+    c.save(); c.translate(rx, ry); const _rc2 = applyShortsRigComp(c); c.scale(bScale, bScale);
+    inkrr(c, -104, -23, 208, 46, 12, '#1E293B', 3, '#FFFFFF');
+    txt(c, o.rightLabel || 'ความจริง', -20, 8, 24, '#F87171', 900, 'center');
+    c.fillStyle = '#FACC15'; c.strokeStyle = '#FFFFFF'; c.lineWidth = 1.6;
+    c.beginPath();
+    c.moveTo(74, -14); c.lineTo(63, 1); c.lineTo(71, 1); c.lineTo(64, 15); c.lineTo(80, -3); c.lineTo(72, -3);
+    c.closePath(); c.fill(); c.stroke();
+    endShortsRigComp(_rc2); c.restore();
+  }
 }
 
 // Legacy stage compatibility wrappers
