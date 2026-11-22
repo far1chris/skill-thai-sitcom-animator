@@ -9,7 +9,13 @@ description: >-
 
 # Thai Adult Cartoon Sitcom Animator (`thai-sitcom-animator`)
 
-Complete production workflow for **Adult Cartoon Sitcom Style** animations in Thai—featuring **clean black ink outlines (`#18181B`, `2.5–3px`), warm flat-color shading, signature half-lidded deadpan sitcom eyes, everyday Thai urban environments (coffee & bakery shops, street signs, BTS/soi sidewalks, offices, condos, convenience stores), recurring cast characters (`CAST`), relatable Thai slice-of-life comedy, and social-media punchline overlays**, built on **HyperFrames (`heygen-com/hyperframes`)** and Gemini Interactions TTS.
+Complete production workflow for **Adult Cartoon Sitcom Style** animations in Thai—using the **Clean Option B Hybrid Visual Standard (คลีนช่วงเล่าเรื่อง + เด้งสติกเกอร์เฉพาะตอนตบมุก)**: clean black ink outlines (`#18181B`, `2.5–3px`), warm flat-color shading, signature half-lidded deadpan sitcom eyes, shallow-DoF blurred everyday Thai urban backgrounds during setups, and **high-impact white-sticker punchline cutouts + radial comic speed-lines + `drawComicBurst()` starbursts** on comedic shock beats—built on **HyperFrames (`heygen-com/hyperframes`)** and Gemini Interactions TTS.
+
+> **Clean Option B Storytelling Rule (NO Giant Top Cream HUD Cards / NO Telemetry Boxes / NO Chapter Pills):**
+> Keep both setup and punchline frames uncluttered so **characters' facial expressions and comedic acting own 70%+ of the screen**:
+> - **ช่วงปูเรื่อง / เล่าเรื่องปกติ (Clean Setup):** ปิดกล่องข้อความสีครีมบนซ้าย (`drawCard`), Telemetry บนขวา (`drawTele`), และป้าย `drawChapter` ทิ้งทั้งหมด (ปิดเป็นค่าเริ่มต้นแล้วใน `core.js` และห้ามใส่ `chapter:`, `tele:`, `hud:` ใน `episode.js`) ให้ใช้ `blurLayer(c, 2.0, ...)` เบลอฉากหลังนุ่มๆ แล้ววางตัวละครไซซ์ใหญ่ (`scale 1.38–1.58`) นั่งหลังโต๊ะ/ถือพร็อพในโลกจริง (ห้ามใส่ขอบสติกเกอร์ขาวช่วงปูเรื่อง เพื่อให้เชื่อมกับโต๊ะ/วัตถุได้เนียน 100%)
+> - **ช่วงตบมุก / ช็อตฟีล (Sticker Punchline Cut):** ใช้ `cameraRig` ซูมกระแทก (`snapAt`) สลับฉากเข้า `drawPunchlineBackdrop()`, วาดตัวละคร Close-Up (`scale 1.9–2.3`) ด้วย `drawStickerPerson()` (ขอบขาว + เงาตกกระทบ) + ท่าฮาๆ (`posePanic`, `poseFacepalm`, `posePoint`) + ดาวระเบิดคอมิก `drawComicBurst()` (`"ซุปสาด!!"`, `"ขาด 2.50!!"`, `"จ๊ะเอ๋!!"`, `"หมดตัว!!"`)
+> - **มุกแชต / บทพูดสั้น:** ใช้ `drawSpeechBubble()` กะทัดรัดชี้ที่ตัวพูด หรือมือถือโคลสอัพ `hand({ phone: true })` แทนกล่องการ์ดยักษ์บังจอ!
 
 ---
 
@@ -25,11 +31,15 @@ Before writing Phase 1 (`episode.js`), confirm or infer from the user's request:
 3. **Target Deliverables:** Master `16:9` MP4 + `1920x1080` Sitcom Thumbnails + **45–60s Shorts/Reels/TikTok Bundle** (auto-sliced by interesting **event cuts** via `format: 'events'`, OR 1 condensed `45–60s` clip, OR max 2 parts with 3s recap) + Clean Covers + Thai Comedy SEO.
 
 ### Bootstrap Project Directory
-Copy all files from [`templates/`](./templates/) and [`scripts/`](./scripts/) into the new episode folder and install dependencies:
+Copy files **ONLY** from [`templates/`](./templates/) and [`scripts/`](./scripts/) into the new episode folder and install dependencies:
 ```powershell
 npm install
 $env:GEMINI_API_KEYS = "key_proj1,key_proj2,key_proj3"
 ```
+
+> **⛔ Strict Context-Isolation Rule (Zero Cross-Episode File Reading) & User Camera Lock:**
+> - **NEVER** scan inside, inspect, or `read_file` any previous `sitcom-*` or episode folders on `C:\`, `D:\`, or `scratch\` (`episode.js`, `views.js`, `packaging.json`). Reading old projects causes subconscious layout/gag cloning.
+> - Map every scene/camera direction requested by the user (`ภาพและฉาก:` / `มุมกล้อง:`) 1:1 into `SCENES` with `cameraSpec`, and keep sub-scene expansions inside the user's specified setting by varying framing, DoF blur, and punchline cuts.
 
 ---
 
@@ -46,42 +56,43 @@ Match the exact **Adult Cartoon Sitcom** visual aesthetic (inspired by modern We
      - `'chill' | 'deadpan' | 'smirk' | 'side_eye' | 'awkward' | 'shock' | 'sigh' | 'happy' | 'annoyed'`
      - Pass `talking: true` when the character is speaking so the mouth animates open/closed naturally with `t`.
      - Use `exprAt` for instant mid-scene punchline reactions (e.g., `exprAt: [[0, 'chill'], [1.8, 'shock']]` or `exprAt: { at: 1.8, expr: 'shock', sweat: true }`) so characters snap from chill to shocked right on the audio beat!
-3. **Everyday Casual Wardrobe & Recurring Cast (`CAST`):**
-   - **Rolled-up button-down shirts** with collar flaps, button plackets, and rolled cuffs (`topStyle: 'button_shirt' | 'tshirt' | 'hoodie' | 'apron'`).
-   - **Cuffed blue jeans (`cuffedJeans: true`)** and **chunky white sneakers with lace details**.
-   - **Bicycle & Everyday Props (`drawBicycle`, `phone`, `coffee`, `toteBag`, `laptop`):** Built-in `drawBicycle(c, x, y, s, { t, rider })` renders the complete city bicycle with spoked wheels, front wire basket, handlebars, pedals, and seated rider pedaling in sync!
+3. **Natural Low Poses & Sitcom Comedy Acting Rigs (`core.js`):**
+   - Sit/crouch naturally with `withHipLean()` hip-pivoting & `clampSitArms()`: **`poseFloorSit(t)`** (`by: 72`) for sitting on floor mats/ground, **`poseSit(t, { curb: true })`** (`by: 54`) for low steps/stools, **`poseSit(t)`** (`by: 34`) for chairs/tables, **`poseSquat(t)`** (`by: 64`) for deep squats, and low grounded **`poseKneel(t)`** (`by: 58`, never for floor sitting!).
+   - Expressive punchline poses: **`posePanic(t)`** (hands thrown up near face in panic), **`poseFacepalm(t)`**, **`posePoint(t)`**, plus `drawBicycle(c, x, y, s, { t, rider })`, `phone`, `coffee`, `receipt`, `creditCard`, `cash50`.
 
-### 1.2 Everyday Daylight & Urban Environments (`core.js` Stage Builders)
-Never use dark horror fog or pure black backgrounds. Use **warm, inviting daylight, golden-hour, or cozy indoor palettes**:
-1. **`streetCafeStage(c, t, o)`:** Warm cream/terracotta brick buildings, **green-&-white striped cafe awning (`COFFEE & BAKERY`)**, **wooden A-frame chalkboard sign (`Today's Special`)**, multi-plate directional street sign pole (`Oak St. / ซอยสุขุมวิท / คาเฟ่เปิดใหม่`), lush puffy green trees, sidewalk curb, asphalt road, and crosswalk stripes.
-2. **`officeStage(c, t, o)`:** Clean modern Thai office desks, computer monitors, partition walls, wall clock (always 17:59!), water cooler, and sunny window blinds.
-3. **`roomInteriorStage(c, t, o)`:** Cozy condo/apartment living room with sofa, TV, potted plant, framed wall art, and warm floor lamp.
-4. **`splitChatStage(c, t, leftFn, rightFn)`:** Dynamic 2-panel split screen for phone calls, Line group chats, or "Expectation vs. Reality (สิ่งที่คิด vs ความเป็นจริง)" gags.
+### 1.2 Everyday Daylight Staging & Option B Punchline Mode (`core.js`)
+Never use dark horror fog or clutter scenes with giant top cream HUD cards. Pair **blurred clean setups** with **high-contrast sticker punchlines**:
+1. **`streetCafeStage(c, t, o)` / `officeStage(c, t, o)` / `roomInteriorStage(c, t, o)` / `splitChatStage(c, t, leftFn, rightFn)`:** Wrap the static background layer inside `blurLayer(c, 1.8..2.4, ...)` during setups so foreground `drawSitcomPerson()` characters & foreground tables pop cleanly with depth of field.
+2. **Option B Punchline Kit (`drawPunchlineBackdrop`, `drawStickerPerson`, `drawComicBurst`, `drawSpeechBubble`):**
+   - `drawPunchlineBackdrop(c, t, o)`: Diagonal comic split gradient (`leftBg` vs `rightBg`) + radial speed-lines (`drawSpeedLines`) + electric lightning bolt crack.
+   - `drawStickerPerson(c, x, y, s, opts, borderR, overlayFn)`: Renders `drawSitcomPerson` (+ optional `overlayFn` soup stains/props inside the silhouette) with an aspect-compensated white sticker border + drop shadow (`16:9` & `9:16 SHORTS_MODE` safe!). Reserve sticker borders **strictly for punchline/shock beats**—never during normal setups where characters sit behind tables.
+   - `drawComicBurst(c, cx, cy, label, o)`: Jagged white+yellow comic starburst + bold Kanit 900 punchword (`"ซุปสาด!!"`, `"ขาด 2.50!!"`, `"สายแน่!!"`) instead of prose HUD boxes.
+   - `drawSpeechBubble(c, x, y, text, o)`: Compact (`<= 340px`) in-world dialogue/thought bubble pointing directly at the character.
 
-> **Dynamic Sitcom Camera & Motion Rule:** Never leave a scene static for `> 3s` and never repeat the exact same stage builder + framing for `> 2` consecutive scenes. Wrap views with `cameraRig(c, lt, s.dur, { zoomFrom: 1.0, zoomTo: 1.04, snapAt, shakeAt })` to trigger crisp `1.16x` punchline snap-zooms synced with comedic SFX.
+> **Dynamic Sitcom Camera & Motion Rule:** Never leave a scene static for `> 3s` and never repeat the exact same framing for `> 2` consecutive scenes. Wrap views with `cameraRig(c, lt, s.dur, { zoomFrom: 1.0, zoomTo: 1.04, snapAt, shakeAt })` so setups gently push in and punchline cuts snap-zoom (`1.12x–1.16x`) synced with comedic SFX.
 
 ---
 
-## 2. Thai Sitcom Comedy Structure & Social Media Overlays
+## 2. Thai Sitcom Comedy Structure & Frameless Punchline Visuals
 
-Read [`references/sitcom-visual-and-comedy-guide.md`](./references/sitcom-visual-and-comedy-guide.md) for full schemas. Instead of chronological intros, use the **Inverted Peak-First 4-Beat Thai Comedy Formula** and **Sitcom UI Overlays (`s.hud`)**:
+Read [`references/sitcom-visual-and-comedy-guide.md`](./references/sitcom-visual-and-comedy-guide.md) for full schemas. Tell every joke visually using the **Inverted Peak-First 4-Beat Thai Comedy Formula**, **Option B Sticker Punchlines**, and frameless `drawSub` subtitles (**top cream HUD cards `drawCard` and `drawTele` are disabled by default**):
 
 ### 2.1 The Event-Cut / Inverted 4-Beat Sitcom Gag Formula (`45–60s` ต่อเหตุการณ์ หรือจบใน 1 คลิป — ไม่เกิน 2 ตอน)
-1. **Beat 1 — Zero-Delay 3-Second Peak / Anomaly Hook (`0.06s` Lead, `t0 = 0.00s` Sub):** ลดการเกริ่นนำตามลำดับเวลา เปิดคลิปด้วยวินาทีที่เจอความผิดปกติหรือช็อตฟีลที่สุดทันทีใน 3 วินาทีแรก (`COLD_OPEN_LEAD = 0.06s`, ซับไตเติลคิวแรกขึ้นที่ `t0 = 0.000s` กระชับ `<= 24–26` ตัวอักษร พร้อม Pop-In และไฮไลต์ตัวเลข/คำพีค) เช่น วินาทีที่ยื่นสแกนจ่ายค่ากาแฟ 145 บาทแล้วแอปแจ้งเตือนเงินเหลือ 142.50 บาท
-2. **Beat 2 — Rewind & Context Setup (ย้อนเล่าที่มาแบบกระชับ):** เล่าย้อนที่มาสั้นๆ ว่า 5 นาทีก่อนเพิ่งปั่นจักรยานสโลว์ไลฟ์ผ่านหน้าร้าน เพื่อดึงเวลาดูเฉลี่ยขึ้น **`30–45 วินาที`**
-3. **Beat 3 — Escalation & Social Trigger (โซเชียล/แชตกลุ่มซ้ำเติม + สิ่งที่คิด vs ความเป็นจริง):** ขยายความวุ่นวายด้วยแชตกลุ่ม LINE หรือเปรียบเทียบสิ่งที่คิดกับความจริงหน้านิ่งๆ (`expr: 'deadpan' | 'side_eye'` หรือ `exprAt` เปลี่ยนหน้ากลางฉาก)
+1. **Beat 1 — Zero-Delay 3-Second Peak / Anomaly Hook (`0.06s` Lead, `t0 = 0.00s` Sub):** เปิดคลิปด้วยวินาทีช็อตฟีลสุดขีดทันทีใน 3 วิแรก (`COLD_OPEN_LEAD = 0.06s` + `t0 = 0.000s` ซับกระชับ `<= 24–26` ตัวอักษร + Sticker Punchline snap-cut & `drawComicBurst()`)
+2. **Beat 2 — Rewind & Context Setup (ย้อนเล่าที่มาแบบคลีน):** ตัดกลับมาช่วงปูเรื่อง **Clean Setup** (ฉากหลังเบลอเบาๆ ไม่มีขอบสติกเกอร์ ไม่มีกรอบข้อความบังหน้า) ให้ตัวละครแสดงแอ็กติงธรรมชาติเพื่อดึง Avg View Duration ขึ้น **`30–45 วินาที`**
+3. **Beat 3 — Escalation & Social Trigger (`splitChatStage` + `drawSpeechBubble` + `exprAt`):** ขยายความป่วนด้วยแชต `splitChatStage` คู่บับเบิลคำพูดกะทัดรัด และ `exprAt` เปลี่ยนหน้าชิลล์เป็นหน้าเหวอตรงจังหวะเสียง
 4. **Beat 4 — Standalone Event-Cut / Punchline Ending (`45–60s` ต่อเหตุการณ์):**
    - **เรื่องยาวหลายมุก/หลายเหตุการณ์ (`format: 'events'`):** ใส่ `eventId` / `eventTitle` ในฉาก หรือ `events: [...]` ใน `shorts_config.json` (หรือปล่อย `shorts_planner.js` ตัดอัตโนมัติ) เพื่อตัดแบ่งเรื่องน่าสนใจออกมาเป็น **แต่ละคลิปเหตุการณ์ `45–60s`** ที่ขมวดปมจบฮาในตัวเอง
    - **เรื่องสั้นจบใน 1 คลิป / ไม่เกิน 2 ตอน:** เรื่องสั้น `<= 58s` จบใน 1 คลิป หรือหากแบ่ง 2 ตอน (`act: 2, isRecap: true`) **ตอนที่ 2 ต้องสรุปความเดิมสั้น ๆ ใน 3 วิแรก!**
    - **High-Retention Ending & 2s Silent Visual CTA:** **ห้ามพูดขอไลก์/แชร์/ซับใน 3 วินาทีสุดท้าย** (`"ฝากกดไลก์ กดแชร์ กดติดตาม..."` เพราะจะทำให้คนดูปัดหนีทันที) ให้ปิดด้วย **(1) คำถามเลือกข้างจากในเรื่อง** (เช่น *"ถ้าเป็นคุณ โดนทักไลน์ตอน 17:59 จะอ่านไม่ตอบ หรือแกล้งสลบคาโต๊ะดีครับ?"*), **(2) ปมค้างคา 1 ประโยค / สะพานเชื่อมคลิปยาวหน้าช่อง**, และ **`drawShortsEndingCTA`** ที่ขึ้นป้าย + ลูกศรชี้ลง `▼` อัตโนมัติในช่วง 2.25 วินาทีสุดท้าย!
 
-### 2.2 Sitcom & Social Media HUD Archetypes (`s.hud`)
-- **`type: 'speech'` / `'thought'`:** Comic speech bubble or cloud thought bubble pointing to a character (`speaker: 'ต้น'`, `text: [...]`).
-- **`type: 'social'` (Social Media Post / Comment Card):** Floating Instagram/TikTok/X/Line notification card with avatar, handle (`@ton_slowlife`), caption, like counter (`❤️ 14.2K`), and top hilarious Thai netizen comment.
-- **`type: 'chalkboard'` / `'price_tag'` (Signage & Wallet Damage Gag):** Cafe menu chalkboard or receipt breakdown (`กาแฟดริปคั่วอ่อน: 280฿`, `เงินในบัญชีเหลือ: 42.50฿`).
-- **`type: 'versus'` (สิ่งที่คิด vs ความเป็นจริง):** Side-by-side comparison card with green expectation vs. red hilarious reality.
-- **`type: 'punchline'` (Sitcom Reaction Banner):** Pop-in yellow/cream comic sticker badge (`⚠ ความจริงวันนี้`, `💸 ตัวเบาเฉียบพลัน`) with punchy Thai tagline.
-- **Top-Right Sitcom Status Pill (`s.telemetry`):** Optional light-hearted life meter — e.g. `day: 'เช้าวันจันทร์ · ซอยอารีย์'`, `time: '08:45'`, `mood: 'ชิลทิพย์'`, `wallet: 120` (เงินติดตัว ฿), `caffeine: 15` (คาเฟอีน %), or `battery: 20` (พลังชีวิต %).
+### 2.2 Visual Comedy Tools vs. Disabled Heavy HUD Cards
+- **Recommended In-Scene Visuals:**
+  - `drawComicBurst(c, cx, cy, label)`: ดาวระเบิดคำตบมุกสั้นๆ (`"ซุปสาด!!"`, `"หมดตัว!!"`, `"ขาด 2.50!!"`)
+  - `drawSpeechBubble(c, x, y, text, o)`: บับเบิลคำพูดขนาดกะทัดรัดตรงหัวคนพูด
+  - `hand(c, x, y, ang, s, { phone: true, receipt: true })`: จอมือถือ/ใบเสร็จโคลสอัพในมือตัวละครจริง
+  - `splitChatStage(c, t, leftFn, rightFn)`: ฉากแบ่งครึ่งสายฟ้าสำหรับมุกเทียบ *"สิ่งที่คิด vs ความเป็นจริง"* หรือโต้ตอบข้ามสถานที่
+- **Disabled by Default (`__ENABLE_SITCOM_HUD` / `__ENABLE_SITCOM_TELE` / `__ENABLE_SITCOM_CHAPTER` off):** กล่องข้อความสีครีมใหญ่ด้านบน (`drawCard`), Telemetry มุมขวาบน (`drawTele`), และป้าย `drawChapter` ถูกปิดเป็นค่าเริ่มต้น เพื่อไม่ให้บังตัวละครและกินพื้นที่จอ 40% เหมือนสไลด์บรรยายครับ
 
 ### 2.3 การตั้งชื่อคลิปและ Shorts SEO: เอาชื่อคลิปขึ้นหน้าสุด (ห้ามนำหน้าด้วย `EP` / `จบในคลิป:`) + `<= 38–45` ตัวอักษร + `| ชื่อซีรีส์`
 - **สูตรตั้งชื่อบังคับ:**

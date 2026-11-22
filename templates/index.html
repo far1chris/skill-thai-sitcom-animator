@@ -193,7 +193,7 @@
     const noBlurViews = window.NO_BLUR_VIEWS || [];
 
     let rackBlur = 0;
-    if (s.blur === true && activeCard && !noBlurViews.includes(s.view) && activeCard.type !== 'inventory') {
+    if (window.__ENABLE_SITCOM_HUD && s.blur === true && activeCard && !noBlurViews.includes(s.view) && activeCard.type !== 'inventory') {
       const at = activeCard.at !== undefined ? activeCard.at : 0.4;
       const ca = prog(lt, at, at + 0.45) * (1 - 0.85 * prog(lt, s.dur - 0.32, s.dur));
       rackBlur = ca * (activeCard.type === 'flow' ? 3.5 : 2.2);
@@ -214,9 +214,9 @@
     const edgeFade = Math.min(fadeIn, fadeOut);
 
     if (!window.__HIDE_HUD) {
-      if (s.chapter) drawChapter(ctx, s.chapter, lt);
-      drawTele(ctx, s, lt);
-      if (activeCard) drawCard(ctx, activeCard, lt, s.dur);
+      if (window.__ENABLE_SITCOM_CHAPTER && s.chapter) drawChapter(ctx, s.chapter, lt);
+      if (window.__ENABLE_SITCOM_TELE) drawTele(ctx, s, lt);
+      if (window.__ENABLE_SITCOM_HUD && activeCard) drawCard(ctx, activeCard, lt, s.dur);
     }
     grain(ctx, t, 0.02);
 

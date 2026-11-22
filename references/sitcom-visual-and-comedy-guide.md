@@ -19,6 +19,9 @@
    - คิ้วหนาที่ขยับตามอารมณ์ (`chill`, `deadpan`, `smirk`, `side_eye`, `awkward`, `shock`, `annoyed`, `sigh`, `happy`)
    - ปากขยับตามเสียงพากย์ (`talking: true`) พร้อมเหงื่อเม็ดโต (`sweat: true`) เวลาเจอสถานการณ์เลิ่กลั่ก
    - รองรับ **`exprAt`** เปลี่ยนสีหน้ากลางฉากได้อัตโนมัติ (เช่น `exprAt: [[0, 'chill'], [1.8, 'shock']]` หรือ `{ at: 1.8, expr: 'shock', sweat: true }`) และ **`cameraRig(c, lt, s.dur, { snapAt, shakeAt })`** เพื่อซูมกระแทกมุก 1.16x ในเสี้ยววินาทีที่ตบมุก
+4. **สไตล์ผสม Option B (Clean Storytelling + Sticker Punchline — มาตรฐานหลัก):**
+   - **ช่วงปูเรื่อง (Setup):** ปิดการ์ดข้อความครีม (`drawCard`) และ Telemetry (`drawTele`) ด้านบนทั้งหมด (ปิดเป็นค่าเริ่มต้นใน `core.js`) แล้วใช้ `blurLayer(c, 1.8..2.4, ...)` เบลอพื้นหลังนุ่มๆ วางตัวละครไซซ์ใหญ่ (`scale 1.38–1.58`) นั่ง/ถือของร่วมกับโต๊ะและฉากจริงแบบ **ไม่มีขอบสติกเกอร์** และใช้ท่านั่งที่ถูกต้อง (`poseFloorSit` สำหรับพื้นเสื่อ, `poseSit({ curb: true })` สำหรับขอนไม้/เก้าอี้เตี้ย, `poseSit()` สำหรับเก้าอี้/โต๊ะ, `poseSquat()` สำหรับนั่งยอง)
+   - **ช่วงตบมุก (Punchline Beat):** เมื่อถึงจังหวะช็อตฟีล ใช้ `cameraRig({ snapAt, shakeAt })` ตัดสลับฉากเข้า **`drawPunchlineBackdrop(c, t, o)`** (พื้นหลังสีตัดทแยง + Speed Lines + สายฟ้า) + **`drawStickerPerson(c, x, y, s, opts, borderR, overlayFn)`** (ขอบสติกเกอร์สีขาว + เงาตกกระทบ) + ท่าฮา (`posePanic`, `poseFacepalm`, `posePoint`) + ดาวระเบิดคอมิก **`drawComicBurst(c, cx, cy, label)`** และบับเบิลพูดสั้นๆ **`drawSpeechBubble(c, x, y, text)`**
 
 ---
 
@@ -104,10 +107,10 @@ Read first: <EPISODE_DIR>/core.js, <EPISODE_DIR>/episode.js, <SKILL_DIR>/referen
 Task: Implement `<EPISODE_DIR>/views.js` (`window.VIEWS` + `window.NO_BLUR_VIEWS`) for every `scene.view`.
 Mandatory Guardrails:
 - Warm flat-color adult sitcom aesthetic with clean dark ink outlines (`INK_OUTLINE = '#18181B'`), `drawSitcomPerson`, `drawBicycle`, and stage builders (`streetCafeStage`, `officeStage`, `roomInteriorStage`, `splitChatStage`).
-- Never repeat the exact same stage builder + identical framing for > 2 consecutive scenes, and use `cameraRig(c, lt, s.dur, { snapAt, shakeAt })` so shots move dynamically and snap-zoom on punchlines.
-- **Natural Sitting & Support Rule:** Default `poseSit(lt)` uses relaxed chair `L`-angles (`by = 32`, shins hanging slightly forward `b < a`). Whenever calling `poseSit`, draw an explicit chair/sofa/bed cushion or raised sidewalk curb step underneath the character's hips (`hipY`); for low curbs pass `{ curb: true }`, and for crouching on flat ground use `poseSquat(lt)` — never leave a seated character floating in mid-air.
+- **`cameraRig` & Option B Sticker Punchline Guard:** Never put giant top cream HUD cards/telemetry boxes (`drawCard` / `drawTele` / `drawChapter`) into scenes; tell jokes cleanly via shallow-DoF blurred setups (`blurLayer(c, 1.8..2.4, ...)`) and switch into **`drawPunchlineBackdrop` + `drawStickerPerson` + `drawComicBurst` + `posePanic`/`poseFacepalm`/`posePoint`** on punchline/shock beats, paired with `cameraRig(c, lt, s.dur, { snapAt, shakeAt })` (no > 2 consecutive identical setups).
+- **Natural Sitting & Support Rule:** Use `poseFloorSit(lt)` for sitting on mats/floors, `poseSit(lt, { curb: true })` on low steps/stools, `poseSit(lt)` on chairs/tables, and `poseSquat(lt)` for flat squats — never use `poseKneel(lt)` as a floor-sit substitute or leave seated characters floating without furniture underneath.
 - **Built-in Sunglasses (`sunglasses: true`):** Never draw a manual black rectangle over eyes for sunglasses; pass `sunglasses: true` to `drawSitcomPerson` so glossy 2-lens wayfarer sunglasses (with nose bridge, temple arm, and white diagonal shine) track the character's head bob automatically.
-- Use `exprAt` for mid-scene reaction shifts (e.g. `[[0, 'chill'], [1.8, 'shock']]`) synced to audio beats, and `talking: true` whenever `s.vo` is active.
+- Use `exprAt` for mid-scene reaction shifts (e.g. `[[0, 'chill'], [1.8, 'shock']]`) synced to audio beats, `drawSpeechBubble()` for crisp dialogue/text gags, and `talking: true` whenever `s.vo` is active.
 ```
 
 #### B. `Visual & Pipeline QA`
@@ -118,6 +121,7 @@ Inspect via read_file: `audit_all_scenes.png`, `thumbnail_*.png`, `shorts/overla
 Verify CLI: `node hf.js lint`, `node hf.js check`, `node inspect_video.js master_hf.mp4 --strict`, `node inspect_video.js shorts/<ep>.mp4 --shorts --strict`
 Checklist:
 - [ ] `SCENES[0]` opens within 0–3s at the comedic peak/twist (`voStart <= 0.08`, pre-roll sub at `0.00s`) and story resolves cleanly in **1 standalone `45–60s` clip** (or max **2 EPs** where Part 2 / `act: 2` opens with `isRecap: true` 3s recap)
+- [ ] **Clean Option B Storytelling:** Zero giant top cream HUD cards/telemetry/chapter pills inside scenes (`audit_all_scenes.png` shows large expressive characters occupying 65–75%+ height, soft blurred setup backgrounds without sticker borders, and snappy `drawPunchlineBackdrop` + `drawStickerPerson` + `drawComicBurst` punchline beats)
 - [ ] `cameraRig` snap-zoom/motion and `exprAt` reaction shifts active on punchline scenes; no > 2 consecutive identical stage setups
 - [ ] Clean `#18181B` ink outlines, half-lidded eyes, proper `sunglasses: true` (no black-block visors), explicit chairs/tables under all `poseSit` characters, and crisp Thai typography without HUD overlap
 - [ ] **High-CTR Comic Thumbnails & Covers (`render_pro_thumbnails.js`)**: `thumbnail_reallens_showdown.png` uses split-contrast radial speed-lines, huge white-sticker-outlined close-up characters (`scale >= 3.2x`), zero raw small HUD cards, and bold 2-tone Kanit 900 headline; `thumbnail_reallens_5panel.png` 2×2 grid places captions cleanly at top (panels 1–2) & bottom (panels 3–4) around the center medallion; `shorts/cover_*.png` renders full-frame 1080×1920 sticker-outlined heroes + top dark scrim + 2-line two-tone headline

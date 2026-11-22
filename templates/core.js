@@ -263,19 +263,93 @@ function poseStand(t, o = {}) {
     tilt: o.tilt || 0
   };
 }
+function clampSitArms(arms, defArms, raw = false) {
+  if (!arms) return defArms;
+  if (raw) return arms;
+  return arms.map((A, i) => {
+    const d = defArms[i] || defArms[0];
+    if (!A || typeof A.a !== 'number') return d;
+    let a = A.a, b = typeof A.b === 'number' ? A.b : d.b;
+    if (a > 0.62) a = 0.28 + Math.min(0.34, (a - 0.62) * 0.32);
+    if (a + b > 1.36) b = Math.max(0.25, 1.32 - a);
+    if (a + b < 0.45) b = 0.55 - a;
+    return { a, b };
+  });
+}
 function poseKneel(t, o = {}) {
+  const defArms = [{ a: 0.36, b: 0.76 }, { a: 0.24, b: 0.72 }];
   return {
-    by: 37, lean: 0.35,
-    legs: [{ a: 1.4, b: 1.4 }, { a: 0.1, b: 1.6 }],
-    arms: o.arms || [{ a: 1.2, b: -0.3 }, { a: 0.9, b: -0.2 }],
-    tilt: o.tilt || 0.2
+    by: o.by !== undefined ? o.by : 58,
+    lean: o.lean !== undefined ? o.lean : 0.16,
+    legs: o.legs || [{ a: 1.78, b: 1.56 }, { a: 0.72, b: 2.24 }],
+    arms: clampSitArms(o.arms, defArms, o.rawArms),
+    tilt: o.tilt !== undefined ? o.tilt : 0.08
+  };
+}
+function poseFloorSit(t, o = {}) {
+  const breathe = Math.sin(t * 2.0) * 0.012;
+  const defArms = [{ a: 0.28, b: 0.78 }, { a: 0.20, b: 0.74 }];
+  return {
+    by: o.by !== undefined ? o.by : 72,
+    lean: (o.lean !== undefined ? o.lean : 0.06) + breathe,
+    legs: o.legs || [{ a: 1.32, b: 2.72 }, { a: 1.22, b: 2.66 }],
+    arms: clampSitArms(o.arms, defArms, o.rawArms),
+    tilt: o.tilt || 0
   };
 }
 function poseSit(t, o = {}) {
+  if (o.floor) return poseFloorSit(t, o);
+  const isCurb = Boolean(o.curb || o.low);
+  const breathe = Math.sin(t * 2.0) * 0.012;
+  const defArms = isCurb
+    ? [{ a: 0.32, b: 0.78 }, { a: 0.22, b: 0.74 }]
+    : [{ a: 0.26, b: 0.84 }, { a: 0.18, b: 0.80 }];
   return {
-    by: o.by !== undefined ? o.by : 32, lean: o.lean !== undefined ? o.lean : -0.04,
-    legs: o.legs || [{ a: 1.38, b: 1.48 }, { a: 1.28, b: 1.40 }],
-    arms: o.arms || [{ a: 0.9, b: 0.9 }, { a: 0.8, b: 1.0 }],
+    by: o.by !== undefined ? o.by : (isCurb ? 54 : 34),
+    lean: o.lean !== undefined ? o.lean : ((isCurb ? 0.08 : 0.02) + breathe),
+    legs: o.legs || (isCurb
+      ? [{ a: 1.72, b: 1.58 }, { a: 1.64, b: 1.50 }]
+      : [{ a: 1.38, b: 1.34 }, { a: 1.30, b: 1.26 }]),
+    arms: clampSitArms(o.arms, defArms, o.rawArms),
+    tilt: o.tilt || 0
+  };
+}
+function poseSquat(t, o = {}) {
+  const defArms = [{ a: 0.42, b: 0.68 }, { a: 0.32, b: 0.66 }];
+  return {
+    by: o.by !== undefined ? o.by : 64,
+    lean: o.lean !== undefined ? o.lean : 0.18,
+    legs: o.legs || [{ a: 2.02, b: 2.38 }, { a: 1.94, b: 2.30 }],
+    arms: clampSitArms(o.arms, defArms, o.rawArms),
+    tilt: o.tilt || 0
+  };
+}
+function posePanic(t, o = {}) {
+  const jitter = Math.sin((t || 0) * 24) * 1.5;
+  return {
+    by: (o.by || 0) + jitter,
+    lean: o.lean !== undefined ? o.lean : -0.08,
+    legs: o.legs || [{ a: 0.06, b: 0 }, { a: -0.06, b: 0 }],
+    arms: o.arms || [{ a: 2.38, b: -0.62 }, { a: 1.98, b: -0.48 }],
+    tilt: o.tilt !== undefined ? o.tilt : -0.06
+  };
+}
+function poseFacepalm(t, o = {}) {
+  const sigh = Math.sin((t || 0) * 2.5) * 0.015;
+  return {
+    by: o.by || 0,
+    lean: (o.lean !== undefined ? o.lean : 0.06) + sigh,
+    legs: o.legs || [{ a: 0.04, b: 0 }, { a: -0.04, b: 0 }],
+    arms: o.arms || [{ a: 1.95, b: 1.12 }, { a: 0.18, b: 0.35 }],
+    tilt: o.tilt !== undefined ? o.tilt : 0.14
+  };
+}
+function posePoint(t, o = {}) {
+  return {
+    by: o.by || 0,
+    lean: o.lean !== undefined ? o.lean : 0.06,
+    legs: o.legs || [{ a: 0.06, b: 0 }, { a: -0.06, b: 0 }],
+    arms: o.arms || [{ a: 1.38, b: 0.18 }, { a: 0.22, b: 0.55 }],
     tilt: o.tilt || 0
   };
 }
@@ -1307,6 +1381,158 @@ function splitChatStage(c, t = 0, leftFn, rightFn) {
   c.beginPath(); c.moveTo(665, 0); c.lineTo(615, H); c.stroke();
 }
 
+// --------------------------------------------------------- OPTION B HYBRID PUNCHLINE HELPERS (Sticker Cutout + Comic Burst)
+const _stickerOff = typeof document !== 'undefined' ? document.createElement('canvas') : null;
+const _stickerHalo = typeof document !== 'undefined' ? document.createElement('canvas') : null;
+if (_stickerOff) { _stickerOff.width = W; _stickerOff.height = H; }
+if (_stickerHalo) { _stickerHalo.width = W; _stickerHalo.height = H; }
+const _sOffCtx = _stickerOff ? _stickerOff.getContext('2d') : null;
+const _sHaloCtx = _stickerHalo ? _stickerHalo.getContext('2d') : null;
+
+function drawSpeedLines(c, cx = W / 2, cy = H / 2, count = 34, rIn = 90, rOut = 960, col = 'rgba(255,255,255,0.14)', t = 0) {
+  c.save();
+  const spin = t * 0.12;
+  for (let i = 0; i < count; i++) {
+    if (i % 2 === 1) continue;
+    const a0 = spin + (i / count) * TAU;
+    const a1 = a0 + (TAU / count) * 0.45;
+    c.fillStyle = col;
+    c.beginPath();
+    c.moveTo(cx + Math.cos(a0) * rIn, cy + Math.sin(a0) * rIn);
+    c.lineTo(cx + Math.cos(a0) * rOut, cy + Math.sin(a0) * rOut);
+    c.lineTo(cx + Math.cos(a1) * rOut, cy + Math.sin(a1) * rOut);
+    c.lineTo(cx + Math.cos(a1) * rIn, cy + Math.sin(a1) * rIn);
+    c.closePath();
+    c.fill();
+  }
+  c.restore();
+}
+
+function drawPunchlineBackdrop(c, t = 0, o = {}) {
+  const lCol = o.leftBg || ['#FDE047', '#F97316', '#991B1B'];
+  const rCol = o.rightBg || ['#2563EB', '#1E293B', '#09090B'];
+  const cx = o.cx !== undefined ? o.cx : W / 2, cy = o.cy !== undefined ? o.cy : H * 0.44;
+  const bgL = c.createRadialGradient(W * 0.27, cy, 40, W * 0.27, cy, 680);
+  bgL.addColorStop(0, lCol[0]); bgL.addColorStop(0.5, lCol[1]); bgL.addColorStop(1, lCol[2]);
+  c.fillStyle = bgL; c.fillRect(0, 0, W, H);
+
+  if (o.split !== false) {
+    c.save();
+    c.beginPath(); c.moveTo(cx + 68, 0); c.lineTo(W, 0); c.lineTo(W, H); c.lineTo(cx - 72, H); c.closePath(); c.clip();
+    const bgR = c.createRadialGradient(W * 0.75, cy, 40, W * 0.75, cy, 640);
+    bgR.addColorStop(0, rCol[0]); bgR.addColorStop(0.6, rCol[1]); bgR.addColorStop(1, rCol[2]);
+    c.fillStyle = bgR; c.fillRect(0, 0, W, H);
+    c.restore();
+  }
+
+  drawSpeedLines(c, cx, cy, o.lineCount || 34, 90, 960, o.lineCol || 'rgba(255,255,255,0.14)', t);
+  if (o.lightning !== false) {
+    c.save();
+    c.strokeStyle = '#FEF08A'; c.lineWidth = 10; c.lineJoin = 'round';
+    c.shadowColor = '#FACC15'; c.shadowBlur = 18;
+    c.beginPath();
+    c.moveTo(cx + 68, -6); c.lineTo(cx + 12, 180); c.lineTo(cx + 58, 215);
+    c.lineTo(cx - 28, 415); c.lineTo(cx + 18, 445); c.lineTo(cx - 72, H + 6);
+    c.stroke();
+    c.strokeStyle = '#FFFFFF'; c.lineWidth = 4; c.stroke();
+    c.restore();
+  }
+}
+
+function drawStickerPerson(c, x, y, s, opts = {}, borderR = 7, overlayFn = null) {
+  if (!_sOffCtx || !_sHaloCtx) {
+    drawSitcomPerson(c, x, y, s, opts);
+    return;
+  }
+  _sOffCtx.setTransform(1, 0, 0, 1, 0, 0);
+  _sOffCtx.clearRect(0, 0, W, H);
+  drawSitcomPerson(_sOffCtx, x, y, s, opts);
+  if (typeof overlayFn === 'function') overlayFn(_sOffCtx, x, y, s);
+
+  _sHaloCtx.setTransform(1, 0, 0, 1, 0, 0);
+  _sHaloCtx.globalCompositeOperation = 'source-over';
+  _sHaloCtx.clearRect(0, 0, W, H);
+  _sHaloCtx.drawImage(_stickerOff, 0, 0);
+  _sHaloCtx.globalCompositeOperation = 'source-in';
+  _sHaloCtx.fillStyle = '#FFFFFF';
+  _sHaloCtx.fillRect(0, 0, W, H);
+  _sHaloCtx.globalCompositeOperation = 'source-over';
+
+  const rx = _inShortsWorld ? (borderR * 1.4 / SHORTS_SX) : borderR;
+  const ry = _inShortsWorld ? (borderR * 1.4 / SHORTS_SY) : borderR;
+  c.save();
+  c.shadowColor = 'rgba(0,0,0,0.48)';
+  c.shadowBlur = 18;
+  c.shadowOffsetY = 8;
+  for (let i = 0; i < 16; i++) {
+    const a = (i / 16) * TAU;
+    c.drawImage(_stickerHalo, Math.cos(a) * rx, Math.sin(a) * ry);
+  }
+  c.shadowColor = 'transparent';
+  c.drawImage(_stickerOff, 0, 0);
+  c.restore();
+}
+
+function drawComicBurst(c, cx, cy, label, o = {}) {
+  const s = o.scale !== undefined ? o.scale : 1;
+  const rIn = o.rIn || 66, rOut = o.rOut || 100, spikes = o.spikes || 12;
+  const drawPoly = (ri, ro, fill, lw) => {
+    c.beginPath();
+    for (let i = 0; i < spikes * 2; i++) {
+      const r = i % 2 === 0 ? ro : ri;
+      const a = (i * Math.PI) / spikes - Math.PI / 2;
+      const px = Math.cos(a) * r, py = Math.sin(a) * r;
+      if (i === 0) c.moveTo(px, py); else c.lineTo(px, py);
+    }
+    c.closePath();
+    c.fillStyle = fill; c.fill();
+    c.strokeStyle = o.stroke || INK_OUTLINE; c.lineWidth = lw; c.lineJoin = 'round'; c.stroke();
+  };
+  c.save();
+  c.translate(cx, cy);
+  const _rc = applyShortsRigComp(c);
+  if (o.rot) c.rotate(o.rot);
+  c.scale(s, s);
+  drawPoly(rIn + 9, rOut + 10, '#FFFFFF', 4.5);
+  drawPoly(rIn, rOut, o.fill || '#FACC15', 4.0);
+  const sz = fitTextSize(c, label, rIn * 1.65, o.fontSize || 34, 18, 900);
+  c.font = `900 ${sz}px ${FONT}`;
+  c.textAlign = 'center'; c.textBaseline = 'middle'; c.lineJoin = 'round';
+  c.lineWidth = 7; c.strokeStyle = '#FFFFFF'; c.strokeText(label, 0, 2);
+  c.fillStyle = o.textCol || '#DC2626'; c.fillText(label, 0, 2);
+  endShortsRigComp(_rc);
+  c.restore();
+}
+
+function drawSpeechBubble(c, x, y, text, o = {}) {
+  const sz = o.size || 20;
+  const maxW = o.maxW || 340;
+  c.save();
+  c.translate(x, y);
+  const _rc = applyShortsRigComp(c);
+  c.font = `700 ${sz}px ${FONT}`;
+  const fittedSz = fitTextSize(c, text, maxW - 36, sz, 14, 700);
+  c.font = `700 ${fittedSz}px ${FONT}`;
+  const tw = c.measureText(text).width;
+  const bw = Math.min(maxW, Math.max(120, Math.ceil(tw + 38)));
+  const bh = fittedSz + 26;
+  const bx = -bw / 2, by = -bh;
+
+  c.fillStyle = 'rgba(24,24,27,0.85)';
+  rr(c, bx + 4, by + 4, bw, bh, 14); c.fill();
+  inkrr(c, bx, by, bw, bh, 14, o.bg || '#FFFDF9', 2.8, INK_OUTLINE);
+  const tailX = o.tailDir === 'br' ? bx + bw * 0.72 : bx + bw * 0.28;
+  const tipX = o.tailDir === 'br' ? tailX + 16 : tailX - 16;
+  c.fillStyle = o.bg || '#FFFDF9';
+  c.strokeStyle = INK_OUTLINE; c.lineWidth = 2.6; c.lineJoin = 'round';
+  c.beginPath(); c.moveTo(tailX - 9, -2); c.lineTo(tipX, 14); c.lineTo(tailX + 9, -2); c.closePath();
+  c.fill(); c.stroke();
+  c.fillRect(tailX - 8, -5, 16, 5);
+  txt(c, text, 0, by + bh / 2 + fittedSz * 0.34, fittedSz, o.col || INK_OUTLINE, 700, 'center');
+  endShortsRigComp(_rc);
+  c.restore();
+}
+
 // Legacy stage compatibility wrappers
 const LIT = { wall: '#EAE4D7', wallSh: '#D6CEBF', floor: '#C89D66', line: '#B58952', ceil: '#F5EFE6', fog: '#F5E6C8', shutter: '#2E5A44', rib: '#1E3329', panel: '#FFFBE8' };
 const DARK = { wall: '#334155', wallSh: '#1E293B', floor: '#475569', line: '#64748B', ceil: '#1E293B', fog: '#0F172A', shutter: '#334155', rib: '#1E293B', panel: '#E2E8F0' };
@@ -1453,7 +1679,8 @@ function normalizeCard(s) {
 }
 
 function drawCard(c, rawCard, lt, sceneDur) {
-  if (typeof window !== 'undefined' && window.__HIDE_HUD) return;
+  // Option B clean storytelling default: top cream cards disabled unless explicitly enabled
+  if (typeof window === 'undefined' || !window.__ENABLE_SITCOM_HUD || window.__HIDE_HUD) return;
   const card = rawCard && !rawCard.pos && !rawCard.head && !rawCard.rows && !rawCard.items && !Array.isArray(rawCard.title)
     ? normalizeCard({ hud: rawCard }) : rawCard;
   if (!card) return;
@@ -1572,9 +1799,9 @@ function drawFlow(c, card, lt) {
   });
 }
 
-// Sitcom Everyday Status Telemetry (supports Wallet Baht, Caffeine, Phone Battery, Mood, or Custom Bar)
+// Sitcom Everyday Status Telemetry (disabled by default in Option B clean storytelling)
 function drawTele(c, s, lt) {
-  if (typeof window !== 'undefined' && window.__HIDE_HUD) return;
+  if (typeof window === 'undefined' || !window.__ENABLE_SITCOM_TELE || window.__HIDE_HUD) return;
   const tl = s.tele || s.telemetry; if (!tl) return;
   const shorts = isShortsMode();
   if (shorts && typeof window !== 'undefined' && window.__HIDE_SHORTS_TELE) return;
@@ -1624,7 +1851,7 @@ function drawTele(c, s, lt) {
 }
 
 function drawChapter(c, chap, lt) {
-  if (typeof window !== 'undefined' && window.__HIDE_HUD) return;
+  if (typeof window === 'undefined' || !window.__ENABLE_SITCOM_CHAPTER || window.__HIDE_HUD) return;
   const label = Array.isArray(chap) ? chap[0] : (chap.label || '');
   const title = Array.isArray(chap) ? chap[1] : (chap.title || '');
   const a = clamp(prog(lt, 0, 0.35)) * (1 - prog(lt, 2.8, 3.3));
