@@ -1,6 +1,6 @@
 // =============================================================================
 //  hf.js — HyperFrames CLI Wrapper with automatic ffmpeg-static & ffprobe-static
-//  Part of skill: reallens-horror-animator
+//  Part of skill: thai-sitcom-animator
 //  Resolves binaries from process.cwd() first (works both when copied into a
 //  project root OR when invoked directly from the skill's scripts/ directory).
 //
@@ -11,7 +11,7 @@
 //    node hf.js snapshot --review
 //    node hf.js snapshot --at 5,60,180 --no-end
 //    node hf.js preview
-//    node hf.js render -f 24 -q looks -o master_hf.mp4
+//    node hf.js render -f 30 -q looks --gpu --browser-gpu -o master_hf.mp4
 // =============================================================================
 const fs = require('fs');
 const path = require('path');
