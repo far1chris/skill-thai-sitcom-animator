@@ -62,7 +62,7 @@ Match the exact **Adult Cartoon Sitcom** visual aesthetic (inspired by modern We
 
 ### 1.2 Everyday Daylight Staging & 6-Mode Punchline Toolkit (`core.js`)
 Never use dark horror fog, clutter scenes with giant top cream HUD cards, or repeat generic orange-blue VS backdrops every punchline. Pair **blurred clean setups** with the **6-Mode Punchline Toolkit** (`16:9` & `9:16 SHORTS_MODE` safe):
-1. **Clean Setup Stages:** **`streetCafeStage(c, t, o)` / `officeStage(c, t, o)` / `roomInteriorStage(c, t, o)` / `splitChatStage(c, t, leftFn, rightFn)`** — wrap static backgrounds inside `blurLayer(c, 1.8..2.4, ...)` during setups so un-bordered foreground characters (`drawSitcomPerson`) and furniture pop naturally with shallow DoF. Pass **`gloom: 0.52`** on any character for clipped forehead dread lines (zero rectangular artifacts outside hair!).
+1. **Clean Setup Stages & `blurLayer` Static Caching:** **`streetCafeStage(c, t, o)` / `officeStage(c, t, o)` / `roomInteriorStage(c, t, o)` / `splitChatStage(c, t, leftFn, rightFn)`** — wrap static backgrounds inside `blurLayer(c, 1.8..2.4, ..., '', 'cacheKey')` (e.g., `'cafe_static_s02'`) so `1080p @ 30fps` renders bypass repeated per-frame Gaussian blurs (40–60% faster!) while leaving moving `pan` setups uncached. Foreground un-bordered `drawSitcomPerson` characters pop cleanly with shallow DoF, and `gloom: 0.52` draws clipped forehead dread lines cleanly inside the head silhouette.
 2. **No Back-to-Back Punchline Repeat Rule:** **ห้ามใช้โหมดตบมุกแบบเดียวกันติดกัน 2 ซีน** และห้ามใช้ `drawPunchlineBackdrop` ซ้ำซาก — เลือกใช้จากตาราง 6 โหมดด้านล่างให้ตรงกับอารมณ์ของมุก:
 
 | อารมณ์มุก (Comedy Mood) | ฟังก์ชันใน `core.js` | จุดเด่นภาพ & แอ็กติง | เสียงเอฟเฟกต์ (`s.sfx`) ที่เข้าคู่ | ใช้ตอนไหน |
@@ -108,17 +108,18 @@ Read [`references/sitcom-visual-and-comedy-guide.md`](./references/sitcom-visual
   - `กาแฟ 145 เงินเหลือ 142?! | ซิตคอมมนุษย์ออฟฟิศ` *(26 ตัวอักษร)*
   - `ประชุม 8:30 ใครสายเลี้ยงทั้งทีม! | ซิตคอมมนุษย์ออฟฟิศ` / `บอสถือใบเสร็จรอหน้าลิฟต์ (ตอนจบ) | ซิตคอมมนุษย์ออฟฟิศ`
 
-### 2.4 High-CTR Comic Sitcom Thumbnails & Vertical Covers (`templates/render_pro_thumbnails.js`)
-แทนที่จะแคปฉากดิบที่มีกรอบ HUD เล็กๆ รกตา ให้สร้างปกสไตล์ **High-CTR Thai Adult Sitcom Comic Cover** ด้วย [`templates/render_pro_thumbnails.js`](./templates/render_pro_thumbnails.js) (อ่านค่าจาก `packaging.json -> proThumbnails` และ `shorts/shorts_plan.json` หรือปรับแต่งพร็อพเฉพาะตอนได้ทันที):
-- **ปกคลิปยาว YouTube แบบที่ 1 (`thumbnail_reallens_showdown.png`, `1920x1080`):**
-  - ฉากหลัง **Diagonal Split Contrast** (สีอุ่นส้ม-แดงตัดสีน้ำเงิน-กรมท่าเข้ม) + เส้น **Radial Comic Speed-Lines** + สายฟ้าผ่ากลางฉาก
-  - ตัวละครหลัก **Close-Up ขนาดใหญ่ (`scale 3.2–3.65x`)** พร้อม **ขอบสติกเกอร์สีขาว + เงาตกกระทบ (`drawStickerChar`)** ให้ตัวละครเด้งออกจากพื้นหลัง (ปิด HUD เล็กๆ จากในคลิปทั้งหมด)
-  - ดาวระเบิดคอมิกตรงกลาง (`จ๊ะเอ๋!!` / คำพีคสั้น) + ป้ายสติกเกอร์ตัวเลขช็อกเอียง 2 มุมบน + แถบมืดด้านล่าง + แคปซูลชื่อซีรีส์ + **พาดหัวใหญ่ 2 สี Kanit 900 ขอบดำหนา** (ขาว + ไล่เฉดเหลือง-ส้ม `#FEF08A -> #FACC15 -> #F97316`) อ่านชัดแม้ดูบนจอมือถือ
-- **ปกคลิปยาว YouTube แบบที่ 2 (`thumbnail_reallens_5panel.png`, `1920x1080` — A/B Test Variant):**
-  - กริดการ์ตูน **2×2 รวม 4 หายนะ** คั่นด้วยขอบขาวหนา พร้อมตัวละคร Close-Up ขอบสติกเกอร์ขาวทุกช่อง
+### 2.4 High-CTR In-Scene Storytelling Sitcom Thumbnails & Vertical Covers (`templates/render_pro_thumbnails.js`)
+**ห้ามทำปกแบบพื้นหลังไล่สีโล่งๆ + กล่องข้อความสีขาวลอยๆ + ตัวละครยืนแขนแข็งชี้ความว่างเปล่าเด็ดขาด!** ให้สร้างปกสไตล์ **In-Scene Cinematic Storytelling Comic Cover** ด้วย [`templates/render_pro_thumbnails.js`](./templates/render_pro_thumbnails.js) ที่โหลดทั้ง `core.js`, `views.js`, และ `timeline.js` เข้ามาร่วมเรนเดอร์ฉากจริงและพร็อพจริงจากในเรื่อง (ปรับแต่งผ่าน `packaging.json -> proThumbnails`, `shorts/shorts_plan.json`, หรือเขียน custom renderer ผ่าน `window.COVER_RENDERERS` / ปรับแก้ใน `render_pro_thumbnails.js` ของโปรเจกต์ได้เลย):
+- **ปกคลิปยาว YouTube แบบที่ 1 (`thumbnail_reallens_showdown.png`, `1920x1080` — Torn-Paper Expectation vs. In-Scene Reality Chaos):**
+  - **ฝั่งซ้าย (สิ่งที่คิด — ฉีกกระดาษแนวทแยงขอบขาวคมชัด):** ฉากจริงสว่างสดใสจากในเรื่อง (`expectView` หรือฉากจริง `views.js`) + ประกายเวกเตอร์ (`drawSparkleVec`) + ตัวละครหลักใส่แว่นดำยิ้มมั่นหน้า (`sunglasses: true`) ถือพร็อพเริ่มต้น + ป้ายเหลือง `"สิ่งที่คิด"` และป้ายสติกเกอร์สีเขียว (เช่น `"กะเซฟค่าช่าง 500.-"`)
+  - **ฝั่งขวา (ความจริง — ฉากหายนะจริง + หลักฐานช็อก):** ฉากจริงที่พังพินาศจากในเรื่อง (`realityView` หรือพร็อพเหตุการณ์จริงครบทุกมุก) + จอมือถือ/บิล/แชตหลักฐานเอียง (`drawEvidencePhone` รองรับ `cracked: true`) + ตัวละครหลักไซซ์ยักษ์ขอบสติกเกอร์ขาว (`drawStickerChar`, `scale 3.3–3.6x`, ท่า `posePanic(1.8)` ธรรมชาติ + `gloom: 0.52` + วิญญาณหลุด `drawSoulEscape`) + คู่กรณีถือพร็อพตบมุก
+  - **ด้านล่าง:** แถบมืดไล่เฉด + แคปซูลชื่อซีรีส์ (ห้ามใช้อิโมจิแหว่ง!) + **พาดหัวใหญ่ 2 สี Kanit 900 ขอบดำหนา** (ขาว + ไล่เฉดเหลือง-ส้ม `#FEF08A -> #FACC15 -> #F97316`) + คำโปรยสั้นอ่านชัดบนจอมือถือ
+- **ปกคลิปยาว YouTube แบบที่ 2 (`thumbnail_reallens_5panel.png`, `1920x1080` — 4-Act In-Scene Action Comic Grid):**
+  - กริดการ์ตูน **2×2 รวม 4 เหตุการณ์จริง** คั่นด้วยขอบขาวหนา โดย **แต่ละช่องต้องเรนเดอร์ฉากจริง + พร็อพจริง + ตัวละครจาก `views.js`** (`c.scale(slot.w / W, slot.h / H)` + `VIEWS[p.view]` หรือฉากแอ็กชันจริงพร้อม `drawStickerPerson` — **ห้ามใช้พื้นหลังไล่สีโล่งกับกล่องข้อความสีขาว**)
   - วางแถบแคปชันเลข `1–2` ที่ **ด้านบน** ของช่องบน และเลข `3–4` ที่ **ด้านล่าง** ของช่องล่าง เพื่อไม่ให้โดนป้ายชื่อตอนขอบทองตรงกลางบังข้อความ
-- **ปก Shorts แนวตั้ง 9:16 (`shorts/cover_*.png`, `1080x1920`):**
-  - ฉากหลังไล่เฉด + เส้น Radial Speed-Lines + ตัวละคร Close-Up ขอบสติกเกอร์ขาว (`drawStickerChar` ใช้ขนาด `c.canvas.width × c.canvas.height` เต็มเฟรม) + พร็อพ/การ์ดจุดพีคกลางเฟรม + แถบไล่สีมืดด้านบนรองรับพาดหัว 2 บรรทัดใหญ่สีขาว/เหลือง-ส้ม (อ่านชัด 100% ไม่มีข้อความพื้นหลังตีกัน)
+- **ปก Shorts แนวตั้ง 9:16 (`shorts/cover_*.png`, `1080x1920` — Full-Bleed In-Scene Vertical Storytelling Covers):**
+  - ใช้ **ฉากจริงแนวตั้งเต็มเฟรม 1080×1920** ที่เล่าเรื่องเหตุการณ์ของคลิปนั้นได้ในพริบตา (เช่น ฉากห้องน้ำท่วม/ครัวไฟลุก/ห้องนอนมืด หรือจับภาพจาก `VIEWS[ep.keyView]` + พร็อพเด่นอย่าง `drawEvidencePhone`, `drawSpeechBubble`, `drawSoulEscape` และพร็อพจาก `views.js`) คู่กับตัวละคร Close-Up ขอบสติกเกอร์ขาวในท่าธรรมชาติ (`posePanic` / `poseFacepalm` / `posePoint` — ห้ามใช้ท่าแขนชี้คู่ขนานแข็งๆ และห้ามวางกล่องข้อความขาวลอยทับพื้นหลังโล่ง!)
+  - ปิดท้ายด้วยแถบไล่สีมืดด้านบน (`y = 0..560`) + **พาดหัว 2 บรรทัดใหญ่สีขาว / ไล่เฉดเหลือง-ส้ม (`Kanit 900` โหลดครบทั้ง `kanit-thai` และ `kanit-latin` woff2/ttf)** — ปิด Pill, ปิด Stamp ด้านล่าง, ปิดอิโมจิแหว่ง และ **ต้องตรวจภาพปกทุกใบด้วย `read_file` เพื่อเช็กว่าพร็อพ/บับเบิลไม่บังหน้าตัวละครก่อนส่งงานเสมอ**
 
 ---
 
@@ -147,13 +148,13 @@ Uses [`templates/generate_audio.js`](./templates/generate_audio.js) with **Stric
 > เมื่อสร้างและตรวจคลิปยาว (`master_hf.mp4` + ปก 16:9) ใน **Stage A** เสร็จแล้ว **ให้หยุดส่งคลิปยาวให้ผู้ใช้ตรวจสอบก่อนเสมอ ห้ามสั่งรัน Stage B (`generate_shorts_overlays.js`, `render_all_shorts.js`, หรือปก Shorts) อัตโนมัติจนกว่าผู้ใช้จะตรวจคลิปยาวเสร็จและบอกให้ทำคลิปสั้นต่อ** *(ยกเว้นกรณีผู้ใช้สั่งทำเฉพาะคลิปสั้นตั้งแต่ต้น)*
 
 ```bash
-# --- Stage A: Long-Form 16:9 Master & QA (ส่งให้ผู้ใช้ตรวจก่อนเสมอ!) ---
-node generate_audio.js                                   # 1. Parallel TTS + Dual-Bus Comedy SFX + timeline.json (-16 LUFS)
-node sync_hyperframes.js                                 # 2. Sync Kanit fonts, GSAP, & scene clips into index.html
-node hf.js lint && node hf.js check                      # 3. Verify 0 errors, 0 warnings in HyperFrames
-node audit_all_scenes.js                                 # 4. Generate audit_all_scenes.png & inspect via read_file
-node hf.js render -f 24 -q looks -o master_hf.mp4        # 5. Render 16:9 Master MP4 (or node render_mp4.js --1080p)
-node inspect_video.js master_hf.mp4 --strict             # 6. Long-Form 16/16 QA Gate -> STOP & let user review master_hf.mp4!
+# --- Stage A: Long-Form 16:9 Native 1080p @ 30fps Master & QA (ส่งให้ผู้ใช้ตรวจก่อนเสมอ!) ---
+node generate_audio.js                                        # 1. Parallel TTS + Dual-Bus Comedy SFX + timeline.json (-16 LUFS)
+node sync_hyperframes.js                                      # 2. Sync Kanit fonts, GSAP, & scene clips into index.html (1920x1080@30fps)
+node hf.js lint && node hf.js check                           # 3. Verify 0 errors, 0 warnings in HyperFrames
+node audit_all_scenes.js                                      # 4. Generate audit_all_scenes.png (GPU rasterized) & inspect via read_file
+node hf.js render -f 30 -q looks --gpu --browser-gpu -o master_hf.mp4  # 5. Native 1080p @ 30fps GPU Master (fast alt: node render_mp4.js NVENC; draft: -f 24 -q draft / --720p)
+node inspect_video.js master_hf.mp4 --strict                  # 6. Long-Form 16/16 QA Gate -> STOP & let user review master_hf.mp4!
 
 # --- Stage B: Vertical Shorts & Covers (รันหลังผู้ใช้ตรวจคลิปยาวและสั่งให้ทำต่อเท่านั้น!) ---
 node render_pro_thumbnails.js                            # 7. Render High-CTR Comic Thumbnails (16:9 Showdown + 2x2 Grid) & Radial 9:16 Shorts Covers

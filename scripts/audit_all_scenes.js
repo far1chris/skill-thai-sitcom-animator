@@ -69,11 +69,28 @@ function findBrowserExecutable() {
   const tw = 440, th = 248;
   const outPath = path.resolve(projectDir, getArg('--out') || 'audit_all_scenes.png');
 
-  const browser = await puppeteer.launch({
-    ...(executablePath ? { executablePath } : {}),
-    headless: 'new',
-    args: ['--no-sandbox', '--disable-gpu', '--allow-file-access-from-files']
-  });
+  const htmlRaw = fs.readFileSync(htmlPath, 'utf8');
+  const rootMatch = htmlRaw.match(/<div\b[^>]*\bid=["']root["'][^>]*>/i);
+  const rootTag = rootMatch ? rootMatch[0] : '';
+  const wMatch = rootTag.match(/data-width=["'](\d+)["']/i);
+  const hMatch = rootTag.match(/data-height=["'](\d+)["']/i);
+  const viewW = wMatch ? parseInt(wMatch[1], 10) : 1920;
+  const viewH = hMatch ? parseInt(hMatch[1], 10) : 1080;
+
+  let browser;
+  try {
+    browser = await puppeteer.launch({
+      ...(executablePath ? { executablePath } : {}),
+      headless: 'new',
+      args: ['--no-sandbox', '--allow-file-access-from-files', '--enable-gpu-rasterization', '--ignore-gpu-blocklist']
+    });
+  } catch (_) {
+    browser = await puppeteer.launch({
+      ...(executablePath ? { executablePath } : {}),
+      headless: 'new',
+      args: ['--no-sandbox', '--disable-gpu', '--allow-file-access-from-files']
+    });
+  }
 
   const pageErrors = [];
   const page = await browser.newPage();
@@ -82,7 +99,7 @@ function findBrowserExecutable() {
     if (msg.type() === 'error') pageErrors.push(`CONSOLE ERR: ${msg.text()}`);
   });
 
-  await page.setViewport({ width: 1280, height: 720, deviceScaleFactor: 1 });
+  await page.setViewport({ width: viewW, height: viewH, deviceScaleFactor: 1 });
   await page.goto('file:///' + htmlPath.replace(/\\/g, '/'), { waitUntil: 'load' });
   await page.evaluate(async () => {
     if (window.__setHeadless) window.__setHeadless();

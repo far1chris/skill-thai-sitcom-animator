@@ -1,14 +1,24 @@
 // =============================================================================
-//  render_pro_thumbnails.js — High-CTR Thai Adult Sitcom Thumbnails & Covers
+//  render_pro_thumbnails.js — In-Scene Cinematic Storytelling Thumbnails & Covers
 //  Part of skill: thai-sitcom-animator
-//  Data-driven via packaging.json (`proThumbnails`) + shorts/shorts_plan.json.
+//  Data-driven via packaging.json (`proThumbnails`), timeline.json, views.js,
+//  and shorts/shorts_plan.json. Optional custom hooks via cover_renderers.js
+//  (`window.COVER_RENDERERS = { showdown, comicGrid, shorts }`).
+//
 //  Generates:
-//    1. thumbnail_reallens_showdown.png (1920x1080 — Split-Contrast Hero Showdown)
-//    2. thumbnail_reallens_5panel.png   (1920x1080 — 2x2 4-Act Comic Grid A/B Cover)
-//    3. shorts/cover_*.png              (1080x1920 — High-CTR Radial Vertical Covers)
+//    1. thumbnail_reallens_showdown.png (1920x1080 — Torn-Paper Expectation vs. Reality)
+//    2. thumbnail_reallens_5panel.png   (1920x1080 — 4-Act In-Scene 2x2 Comic Grid)
+//    3. shorts/cover_*.png              (1080x1920 — Full-Bleed In-Scene Vertical Covers)
+//
+//  Design Standards (Enforced):
+//    - ZERO empty radial-gradient voids (always renders live views.js or built-in sitcom stages)
+//    - ZERO plain white text cards (uses diegetic drawEvidencePhone / speech bubbles / props)
+//    - ZERO stiff parallel zombie arms (uses natural posePanic / poseFacepalm / posePoint)
+//    - ZERO unicode emojis in Canvas text (auto-stripped; uses vector drawSparkleVec instead)
+//    - Supports BOTH Kanit .ttf AND @fontsource/kanit Thai + Latin .woff2 subsets
 //
 //  Usage:
-//    node render_pro_thumbnails.js [--dir <projectDir>]
+//    node render_pro_thumbnails.js [--dir <projectDir>] [--out-dir <outputDir>]
 // =============================================================================
 const fs = require('fs');
 const path = require('path');
@@ -23,6 +33,7 @@ function getArg(...flags) {
 }
 
 const projectDir = path.resolve(getArg('--dir') || process.cwd());
+const outDir = path.resolve(getArg('--out-dir') || projectDir);
 const localReq = createRequire(
   fs.existsSync(path.join(projectDir, 'package.json'))
     ? path.join(projectDir, 'package.json')
@@ -56,85 +67,267 @@ function findChrome() {
   return undefined;
 }
 
-const fontRegular = path.join(projectDir, 'assets', 'fonts', 'Kanit-Regular.ttf').replace(/\\/g, '/');
-const fontBold = path.join(projectDir, 'assets', 'fonts', 'Kanit-Bold.ttf').replace(/\\/g, '/');
-const fontBlack = path.join(projectDir, 'assets', 'fonts', 'Kanit-Black.ttf').replace(/\\/g, '/');
-const fontExtraBold = fs.existsSync(path.join(projectDir, 'assets', 'fonts', 'Kanit-ExtraBold.ttf'))
-  ? path.join(projectDir, 'assets', 'fonts', 'Kanit-ExtraBold.ttf').replace(/\\/g, '/')
-  : fontBlack;
+// Strip pictographic Unicode emojis (Canvas lacks color emoji font fallback on headless Windows)
+function stripEmoji(str) {
+  return String(str || '')
+    .replace(/[\p{Extended_Pictographic}\uFE0F]/gu, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
+const THAI_UNICODE_RANGE = 'U+0E00-0E7F, U+200C-200D, U+25CC';
+const LATIN_UNICODE_RANGE = 'U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD';
+
+function buildFontFaceRules(ttfName, weight, fallbackWeight = 900) {
+  const fontsDir = path.join(projectDir, 'assets', 'fonts');
+  const ttf = path.join(fontsDir, ttfName);
+  if (fs.existsSync(ttf)) {
+    return `@font-face { font-family: 'Kanit'; src: url('file:///${ttf.replace(/\\/g, '/')}') format('truetype'); font-weight: ${weight}; }`;
+  }
+  const w = fs.existsSync(path.join(fontsDir, `kanit-thai-${weight}-normal.woff2`)) ? weight : fallbackWeight;
+  const thai = path.join(fontsDir, `kanit-thai-${w}-normal.woff2`);
+  const latin = path.join(fontsDir, `kanit-latin-${w}-normal.woff2`);
+  const rules = [];
+  if (fs.existsSync(thai)) {
+    rules.push(`@font-face { font-family: 'Kanit'; src: url('file:///${thai.replace(/\\/g, '/')}') format('woff2'); font-weight: ${weight}; unicode-range: ${THAI_UNICODE_RANGE}; }`);
+  }
+  if (fs.existsSync(latin)) {
+    rules.push(`@font-face { font-family: 'Kanit'; src: url('file:///${latin.replace(/\\/g, '/')}') format('woff2'); font-weight: ${weight}; unicode-range: ${LATIN_UNICODE_RANGE}; }`);
+  }
+  return rules.join('\n  ');
+}
 
 const coreSrc = fs.readFileSync(path.join(projectDir, 'core.js'), 'utf8');
+const viewsPath = path.join(projectDir, 'views.js');
+const viewsSrc = fs.existsSync(viewsPath) ? fs.readFileSync(viewsPath, 'utf8') : '';
+const coverHookPath = path.join(projectDir, 'cover_renderers.js');
+const coverHookSrc = fs.existsSync(coverHookPath) ? fs.readFileSync(coverHookPath, 'utf8') : '';
+
 const pkgPath = path.join(projectDir, 'packaging.json');
 const pkg = fs.existsSync(pkgPath) ? JSON.parse(fs.readFileSync(pkgPath, 'utf8')) : {};
+const timelinePath = path.join(projectDir, 'timeline.json');
+const timeline = fs.existsSync(timelinePath) ? JSON.parse(fs.readFileSync(timelinePath, 'utf8')) : null;
 const planPath = path.join(projectDir, 'shorts', 'shorts_plan.json');
 const shortsPlan = fs.existsSync(planPath) ? JSON.parse(fs.readFileSync(planPath, 'utf8')) : null;
 
-// Build data-driven config with sensible sitcom defaults if `proThumbnails` is omitted
-const proCfg = pkg.proThumbnails || {};
-const showdownCfg = Object.assign({
-  leftBg: ['#FDE047', '#F97316', '#991B1B'],
-  rightBg: ['#2563EB', '#1E293B', '#09090B'],
-  leftChar: { cast: 'ton', expr: 'shock', darkCircles: true, tear: true, sweat: true },
-  rightChar: { cast: 'boss', expr: 'shock' },
-  centerBurst: 'จ๊ะเอ๋!!',
-  leftBadge: { bg: '#DC2626', line1: 'ความพังขั้นสุด!', line2: 'ช็อกทั้งออฟฟิศ!', l1Col: '#FFFFFF', l2Col: '#FEF08A' },
-  rightBadge: { bg: '#1E293B', line1: 'ชีวิตมนุษย์ออฟฟิศ', line2: 'เหลือติดบัญชี!', l1Col: '#FACC15', l2Col: '#4ADE80' },
-  seriesPill: '🔥 ซิตคอมมนุษย์ออฟฟิศ · ตอนพิเศษ',
-  headlineWhite: (pkg.title || 'ช็อตฟีลทั้งวัน ').split(' ').slice(0, 2).join(' ') + ' ',
-  headlineGold: (pkg.title || 'ซวยยับทั้งสัปดาห์!').split(' ').slice(2).join(' ') || 'พังยับไม่เหลือชิ้นดี!',
-  subHook: pkg.subtitle || 'ฮาจุกอก · หักมุมซ้ำสอง · ชีวิตจริงมนุษย์เงินเดือน!'
-}, proCfg.showdown || {});
+const scenes = (timeline && Array.isArray(timeline.scenes)) ? timeline.scenes : [];
 
-const comicGridCfg = Object.assign({
-  centerTitle: pkg.title || 'ซิตคอมมนุษย์ออฟฟิศ!',
-  centerSub: 'ซิตคอมมนุษย์ออฟฟิศ · รวมครบ 4 หายนะ!',
-  panels: [
-    { num: '1', bg: ['#1E3A8A', '#0F172A'], tagBg: '#16A34A', tag: 'องก์ 1 · จุดเริ่มต้นหายนะ!', cast: 'ton', expr: 'shock', cardHeader: 'เหตุการณ์ #1', cardBig: 'พังยับ!!', cardSub: 'ไม่น่าเลยกู...' },
-    { num: '2', bg: ['#991B1B', '#450A0A'], tagBg: '#DC2626', tag: 'องก์ 2 · พลาดซ้ำสอง!', cast: 'ton', expr: 'shock', cardHeader: 'เหตุการณ์ #2', cardBig: 'ฉิบหายแล้ว!', cardSub: 'แก้ไม่ทันแล้ว!' },
-    { num: '3', bg: ['#F59E0B', '#B45309'], tagBg: '#EA580C', tag: 'องก์ 3 · จ๊ะเอ๋กลางทาง!', cast: 'ton', rightCast: 'boss', expr: 'shock', burst: 'จ๊ะเอ๋!' },
-    { num: '4', bg: ['#4C1D95', '#1E1B4B'], tagBg: '#7C3AED', tag: 'องก์ 4 · บทสรุปตัวเบา!', cast: 'ton', expr: 'sigh', cardHeader: 'ยอดรวมสุทธิ', cardBig: 'หมดตัว!', cardSub: 'เหลือติดบัญชี' }
-  ]
-}, proCfg.comicGrid || {});
+function findSceneById(id) {
+  if (!id) return null;
+  return scenes.find(s => s.id === id || s.view === id) || null;
+}
 
-function buildShortsCoverConfigs() {
-  if (Array.isArray(proCfg.shortsCovers) && proCfg.shortsCovers.length > 0) {
-    return proCfg.shortsCovers;
+function findSceneAtGlobalTime(sec) {
+  const t = Number(sec);
+  if (!Number.isFinite(t) || scenes.length === 0) return null;
+  return scenes.find(s => t >= Number(s.start || 0) && t < Number(s.start || 0) + Number(s.dur || 0)) || null;
+}
+
+function computeSceneLt(scene, extractAtSec) {
+  if (!scene) return 1.5;
+  const dur = Math.max(0.8, Number(scene.dur || 5));
+  if (extractAtSec !== undefined && extractAtSec !== null) {
+    const t = Number(extractAtSec);
+    const st = Number(scene.start || 0);
+    if (Number.isFinite(t) && t >= st && t <= st + dur) {
+      return Math.max(0.35, Math.min(dur - 0.35, t - st));
+    }
   }
-  const palettes = [
-    ['#FDE047', '#EA580C', '#7C2D12'],
-    ['#EF4444', '#991B1B', '#18181B'],
-    ['#7C3AED', '#312E81', '#09090B'],
-    ['#2563EB', '#1E293B', '#09090B']
-  ];
+  if (typeof scene.coverAt === 'number' && Number.isFinite(scene.coverAt)) {
+    return Math.max(0.25, Math.min(dur - 0.25, scene.coverAt));
+  }
+  return Math.max(0.5, Math.min(dur - 0.4, dur * 0.42));
+}
+
+function pickAutoShowdownScenes() {
+  if (scenes.length === 0) return { expect: null, reality: null };
+  const expect =
+    scenes.find(s => /setup|intro|morning|start/i.test(String(s.id || '')) && !s.isClimax) ||
+    scenes.find(s => !s.isClimax && !/cold/i.test(String(s.id || ''))) ||
+    scenes[0];
+  const reality =
+    scenes.find(s => s.isClimax && !/cold/i.test(String(s.id || ''))) ||
+    scenes.find(s => /peak|twist|climax/i.test(String(s.id || ''))) ||
+    scenes.find(s => s.isClimax) ||
+    scenes[Math.min(scenes.length - 1, Math.floor(scenes.length / 2))];
+  return { expect, reality };
+}
+
+function pickAuto4PanelScenes() {
   const eps = (shortsPlan && Array.isArray(shortsPlan.episodes)) ? shortsPlan.episodes : [];
-  return eps.map((ep, idx) => {
-    const pal = palettes[idx % palettes.length];
-    const outFile = (ep.coverFile || `cover_event_${String(idx + 1).padStart(2, '0')}.png`);
+  if (eps.length >= 4) {
+    return eps.slice(0, 4).map(ep => {
+      const sc =
+        findSceneById(ep.keySceneId) ||
+        findSceneById(ep.keyView) ||
+        findSceneAtGlobalTime(ep.extractAt) ||
+        (Array.isArray(ep.sceneIds) && ep.sceneIds.length ? findSceneById(ep.sceneIds[ep.sceneIds.length - 1]) : null);
+      if (!sc) return null;
+      return {
+        view: ep.keyView || sc.view,
+        lt: computeSceneLt(sc, ep.extractAt),
+        dur: Number(sc.dur || 6),
+        focusX: Number(ep.focusX || sc.focusX || 640),
+        sceneId: sc.id
+      };
+    });
+  }
+  if (scenes.length === 0) return [null, null, null, null];
+  const nonCold = scenes.filter(s => !/cold/i.test(String(s.id || '')));
+  const pool = nonCold.length >= 4 ? nonCold : scenes;
+  return [0, 1, 2, 3].map(q => {
+    const startIdx = Math.floor((q / 4) * pool.length);
+    const endIdx = Math.max(startIdx + 1, Math.floor(((q + 1) / 4) * pool.length));
+    const slice = pool.slice(startIdx, endIdx);
+    const best =
+      slice.find(s => s.isClimax) ||
+      slice.find(s => /twist|peak|escalation/i.test(String(s.id || ''))) ||
+      slice[Math.floor(slice.length / 2)] ||
+      pool[Math.min(pool.length - 1, startIdx)];
     return {
-      outFile,
-      bg: pal,
-      line1: ep.titleLine1 || ep.eventTitle || `เหตุการณ์ #${idx + 1}`,
-      line2: ep.titleLine2 || 'พังยับไม่เหลือ!',
-      cast: 'ton',
-      rightCast: idx % 2 === 0 ? 'boss' : null,
-      burst: idx % 2 === 0 ? 'จ๊ะเอ๋!!' : null,
-      cardHeader: ep.eventTitle || `ตอนที่ ${idx + 1}`,
-      cardBig: ep.titleLine2 || 'ช็อก!!',
-      cardSub: ep.titleLine1 || ''
+      view: best.view,
+      lt: computeSceneLt(best, null),
+      dur: Number(best.dur || 6),
+      focusX: Number(best.focusX || 640),
+      sceneId: best.id
     };
   });
 }
 
+// Build data-driven configs with rich in-scene sitcom defaults
+const proCfg = pkg.proThumbnails || {};
+const autoShowdown = pickAutoShowdownScenes();
+
+const rawShowdown = Object.assign({
+  expectStage: 'cafe',
+  realityStage: 'office',
+  expectTag: 'สิ่งที่คิด',
+  leftChar: { cast: 'ton', expr: 'happy', sunglasses: true },
+  heroChar: { cast: 'ton', expr: 'shock', darkCircles: true, tear: true, sweat: true, gloom: 0.52, pose: 'panic' },
+  rightChar: { cast: 'boss', expr: 'annoyed', pose: 'point' },
+  centerBurst: null,
+  leftBadge: { bg: '#16A34A', line1: 'กะชิลๆ ประหยัดงบ', line2: 'ง่ายนิดเดียว!', l1Col: '#FFFFFF', l2Col: '#FEF08A' },
+  rightBadge: { bg: '#DC2626', line1: 'ความจริงพังยับ!', line2: 'ช็อกทั้งออฟฟิศ!', l1Col: '#FFFFFF', l2Col: '#FEF08A' },
+  seriesPill: 'ซิตคอมคนเมือง · ตอนพิเศษ',
+  headlineWhite: (pkg.title || 'ช็อตฟีลทั้งวัน ').split(' ').slice(0, 2).join(' ') + ' ',
+  headlineGold: (pkg.title || 'ซวยยับทั้งสัปดาห์!').split(' ').slice(2).join(' ') || 'พังยับไม่เหลือชิ้นดี!',
+  subHook: pkg.subtitle || 'ฮาจุกอก · หักมุมซ้ำสอง · ชีวิตจริงคนเมือง!'
+}, proCfg.showdown || {});
+
+const showdownCfg = Object.assign({}, rawShowdown, {
+  seriesPill: stripEmoji(rawShowdown.seriesPill),
+  expectTag: stripEmoji(rawShowdown.expectTag || 'สิ่งที่คิด'),
+  expectView: rawShowdown.expectView !== undefined ? rawShowdown.expectView : (autoShowdown.expect ? autoShowdown.expect.view : null),
+  expectLt: rawShowdown.expectLt !== undefined ? rawShowdown.expectLt : computeSceneLt(autoShowdown.expect, null),
+  expectDur: rawShowdown.expectDur !== undefined ? rawShowdown.expectDur : Number((autoShowdown.expect && autoShowdown.expect.dur) || 6),
+  realityView: rawShowdown.realityView !== undefined ? rawShowdown.realityView : (autoShowdown.reality ? autoShowdown.reality.view : null),
+  realityLt: rawShowdown.realityLt !== undefined ? rawShowdown.realityLt : computeSceneLt(autoShowdown.reality, null),
+  realityDur: rawShowdown.realityDur !== undefined ? rawShowdown.realityDur : Number((autoShowdown.reality && autoShowdown.reality.dur) || 6),
+  // Keep backward compatibility: if packaging.json styled `leftChar` as shocked hero, carry its colors/cast onto heroChar
+  heroChar: Object.assign(
+    { cast: 'ton', expr: 'shock', darkCircles: true, tear: true, sweat: true, gloom: 0.52, pose: 'panic' },
+    (proCfg.showdown && proCfg.showdown.leftChar && proCfg.showdown.leftChar.colors) ? { cast: proCfg.showdown.leftChar.cast || 'ton', colors: proCfg.showdown.leftChar.colors } : {},
+    (proCfg.showdown && proCfg.showdown.heroChar) || {}
+  ),
+  expectChar: Object.assign(
+    { cast: (proCfg.showdown && proCfg.showdown.leftChar && proCfg.showdown.leftChar.cast) || 'ton', expr: 'happy', sunglasses: true, pose: 'smug' },
+    (proCfg.showdown && proCfg.showdown.expectChar) || {}
+  )
+});
+
+const autoPanels = pickAuto4PanelScenes();
+const defaultPanels = [
+  { num: '1', stage: 'cafe', tagBg: '#0284C7', tag: 'องก์ 1 · จุดเริ่มต้นหายนะ!', cast: 'ton', expr: 'shock', cardHeader: 'เหตุการณ์ #1', cardBig: 'พังยับ!!', cardSub: 'ไม่น่าเลยกู...' },
+  { num: '2', stage: 'office', tagBg: '#DC2626', tag: 'องก์ 2 · พลาดซ้ำสอง!', cast: 'ton', expr: 'shock', cardHeader: 'เหตุการณ์ #2', cardBig: 'ช็อกทั้งตึก!', cardSub: 'แก้ไม่ทันแล้ว!' },
+  { num: '3', stage: 'room', tagBg: '#EA580C', tag: 'องก์ 3 · จ๊ะเอ๋กลางทาง!', cast: 'ton', rightCast: 'boss', expr: 'shock', burst: 'จ๊ะเอ๋!' },
+  { num: '4', stage: 'roomNight', tagBg: '#7C3AED', tag: 'องก์ 4 · บทสรุปตัวเบา!', cast: 'ton', expr: 'sigh', cardHeader: 'ยอดรวมสุทธิ', cardBig: 'หมดตัว!', cardSub: 'เหลือติดบัญชี' }
+];
+const rawPanels = (proCfg.comicGrid && Array.isArray(proCfg.comicGrid.panels) && proCfg.comicGrid.panels.length >= 4)
+  ? proCfg.comicGrid.panels.slice(0, 4)
+  : defaultPanels;
+
+const comicGridCfg = Object.assign({
+  centerTitle: stripEmoji(pkg.title || 'ซิตคอมคนเมือง!').split('|')[0].trim(),
+  centerSub: stripEmoji(pkg.subtitle || 'ซิตคอมคนเมือง · รวมครบ 4 หายนะ!')
+}, proCfg.comicGrid || {}, {
+  panels: rawPanels.map((p, idx) => {
+    const autoP = autoPanels[idx] || {};
+    return Object.assign({}, defaultPanels[idx], p, {
+      tag: stripEmoji(p.tag || defaultPanels[idx].tag),
+      view: p.view !== undefined ? p.view : (autoP.view || null),
+      lt: p.lt !== undefined ? p.lt : (autoP.lt !== undefined ? autoP.lt : 1.5),
+      dur: p.dur !== undefined ? p.dur : (autoP.dur || 6),
+      focusX: p.focusX !== undefined ? p.focusX : (autoP.focusX || 640)
+    });
+  })
+});
+
+function buildShortsCoverConfigs() {
+  const eps = (shortsPlan && Array.isArray(shortsPlan.episodes)) ? shortsPlan.episodes : [];
+  const manualList = (Array.isArray(proCfg.shortsCovers) && proCfg.shortsCovers.length > 0) ? proCfg.shortsCovers : null;
+  const stages = ['cafe', 'office', 'room', 'roomNight'];
+  const count = manualList ? manualList.length : eps.length;
+  const out = [];
+
+  for (let idx = 0; idx < count; idx++) {
+    const manual = manualList ? manualList[idx] : {};
+    const ep = eps[idx] || {};
+    const scene =
+      findSceneById(manual.sceneId || manual.view) ||
+      findSceneById(ep.keySceneId) ||
+      findSceneById(ep.keyView) ||
+      findSceneAtGlobalTime(ep.extractAt) ||
+      (Array.isArray(ep.sceneIds) && ep.sceneIds.length ? findSceneById(ep.sceneIds[ep.sceneIds.length - 1]) : null);
+
+    const view = manual.view !== undefined ? manual.view : (ep.keyView || (scene && scene.view) || null);
+    const lt = manual.lt !== undefined ? manual.lt : computeSceneLt(scene, ep.extractAt);
+    const dur = manual.dur !== undefined ? manual.dur : Number((scene && scene.dur) || 6);
+    const focusX = manual.focusX !== undefined ? manual.focusX : Number(ep.focusX || (scene && scene.focusX) || 640);
+    const outFile = manual.outFile || ep.coverFile || `cover_event_${String(idx + 1).padStart(2, '0')}.png`;
+    const line1 = stripEmoji(manual.line1 || ep.titleTop || ep.topLine || ep.titleLine1 || ep.eventTitle || `เหตุการณ์ #${idx + 1}`);
+    const line2 = stripEmoji(manual.line2 || ep.titleBot || ep.redWord || ep.titleLine2 || 'พังยับไม่เหลือ!');
+
+    out.push(Object.assign({
+      eventNum: idx + 1,
+      outFile,
+      stage: stages[idx % stages.length],
+      view,
+      lt,
+      dur,
+      focusX,
+      line1,
+      line2,
+      cast: 'ton',
+      rightCast: idx % 2 === 0 ? 'boss' : null,
+      burst: idx % 2 === 0 ? 'ช็อก!!' : null
+    }, manual, {
+      eventNum: manual.eventNum || (idx + 1),
+      outFile,
+      view,
+      lt,
+      dur,
+      focusX,
+      line1,
+      line2
+    }));
+  }
+  return out;
+}
+
 function buildThumbnailHtml() {
+  const fontRules = [
+    buildFontFaceRules('Kanit-Regular.ttf', 400, 400),
+    buildFontFaceRules('Kanit-Bold.ttf', 700, 700),
+    buildFontFaceRules('Kanit-ExtraBold.ttf', 800, 900),
+    buildFontFaceRules('Kanit-Black.ttf', 900, 900)
+  ].filter(Boolean).join('\n  ');
+
   return `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8"/>
 <style>
-  @font-face { font-family: 'Kanit'; src: url('file:///${fontRegular}'); font-weight: 400; }
-  @font-face { font-family: 'Kanit'; src: url('file:///${fontBold}'); font-weight: 700; }
-  @font-face { font-family: 'Kanit'; src: url('file:///${fontExtraBold}'); font-weight: 800; }
-  @font-face { font-family: 'Kanit'; src: url('file:///${fontBlack}'); font-weight: 900; }
+  ${fontRules}
   html, body { margin: 0; padding: 0; overflow: hidden; background: #000; }
   canvas { display: block; }
 </style>
@@ -143,6 +336,124 @@ function buildThumbnailHtml() {
 <canvas id="cv" width="1920" height="1080"></canvas>
 <script>
 ${coreSrc}
+${viewsSrc}
+${coverHookSrc}
+
+// Cached 1280x720 offscreen buffer for rendering live views.js & built-in stages cleanly
+const _viewOff = document.createElement('canvas');
+_viewOff.width = W;
+_viewOff.height = H;
+const _viewCtx = _viewOff.getContext('2d');
+
+function resolvePose(poseSpec, t = 1.8) {
+  if (poseSpec && typeof poseSpec === 'object') return poseSpec;
+  const key = String(poseSpec || '').toLowerCase();
+  if (key === 'panic') return posePanic(t);
+  if (key === 'facepalm') return poseFacepalm(t);
+  if (key === 'point') return posePoint(t);
+  if (key === 'smug') {
+    return {
+      by: 0, lean: -0.02, tilt: -0.03,
+      arms: [{ a: 0.85, b: 1.05 }, { a: 0.14, b: 0.30 }],
+      legs: [{ a: 0, b: 0 }, { a: 0, b: 0 }]
+    };
+  }
+  return poseStand(t);
+}
+
+function drawFallbackStageOn(vc, stageKey, t = 1.5) {
+  vc.save();
+  vc.setTransform(1, 0, 0, 1, 0, 0);
+  vc.clearRect(0, 0, W, H);
+  const key = String(stageKey || 'cafe').toLowerCase();
+  if (key === 'office') {
+    officeStage(vc, t);
+  } else if (key === 'roomnight' || key === 'night') {
+    roomInteriorStage(vc, t, { night: true });
+  } else if (key === 'room' || key === 'bedroom' || key === 'home') {
+    roomInteriorStage(vc, t, { night: false });
+  } else {
+    streetCafeStage(vc, t);
+  }
+  vc.restore();
+}
+
+function renderLiveView16x9(c, viewName, lt, dur, focusX, dx, dy, dw, dh, fallbackStage = 'cafe', blurPx = 0) {
+  const prevShorts = window.SHORTS_MODE;
+  const prevHide = window.__HIDE_HUD;
+  const prevCover = window.__COVER_MODE;
+  window.SHORTS_MODE = false;
+  window.__HIDE_HUD = true;
+  window.__COVER_MODE = true;
+  let rendered = false;
+  try {
+    _viewCtx.setTransform(1, 0, 0, 1, 0, 0);
+    _viewCtx.clearRect(0, 0, W, H);
+    if (viewName && window.VIEWS && typeof window.VIEWS[viewName] === 'function') {
+      const dummyScene = { id: viewName, view: viewName, dur: dur || 6, focusX: focusX || 640, subs: [] };
+      window.VIEWS[viewName](_viewCtx, lt !== undefined ? lt : 1.5, dummyScene);
+      rendered = true;
+    } else {
+      drawFallbackStageOn(_viewCtx, fallbackStage, lt !== undefined ? lt : 1.5);
+    }
+  } catch (err) {
+    console.warn('renderLiveView16x9 fallback for', viewName, err && err.message);
+    drawFallbackStageOn(_viewCtx, fallbackStage, 1.5);
+  } finally {
+    window.SHORTS_MODE = prevShorts;
+    window.__HIDE_HUD = prevHide;
+    window.__COVER_MODE = prevCover;
+  }
+  c.save();
+  if (blurPx > 0) {
+    c.filter = 'blur(' + blurPx + 'px) saturate(1.12)';
+    const pad = blurPx * 2.5;
+    c.drawImage(_viewOff, 0, 0, W, H, dx - pad, dy - pad, dw + pad * 2, dh + pad * 2);
+  } else {
+    c.drawImage(_viewOff, 0, 0, W, H, dx, dy, dw, dh);
+  }
+  c.restore();
+  return rendered;
+}
+
+function renderLiveViewShorts(c, viewName, lt, dur, focusX, fallbackStage = 'cafe') {
+  const prevShorts = window.SHORTS_MODE;
+  const prevHide = window.__HIDE_HUD;
+  const prevFocus = window.__SHORTS_FOCUS_X;
+  const prevCover = window.__COVER_MODE;
+  window.SHORTS_MODE = true;
+  window.__HIDE_HUD = true;
+  window.__COVER_MODE = true;
+  window.__SHORTS_FOCUS_X = typeof focusX === 'number' ? focusX : 640;
+  let rendered = false;
+  let sw = false;
+  try {
+    const dummyScene = { id: viewName || 'cover', view: viewName || '', dur: dur || 6, focusX: window.__SHORTS_FOCUS_X, subs: [] };
+    sw = beginShortsWorld(c, dummyScene);
+    if (viewName && window.VIEWS && typeof window.VIEWS[viewName] === 'function') {
+      window.VIEWS[viewName](c, lt !== undefined ? lt : 1.5, dummyScene);
+      rendered = true;
+    } else {
+      const key = String(fallbackStage || 'cafe').toLowerCase();
+      if (key === 'office') officeStage(c, lt || 1.5);
+      else if (key === 'roomnight' || key === 'night') roomInteriorStage(c, lt || 1.5, { night: true });
+      else if (key === 'room' || key === 'bedroom' || key === 'home') roomInteriorStage(c, lt || 1.5, { night: false });
+      else streetCafeStage(c, lt || 1.5);
+    }
+  } catch (err) {
+    console.warn('renderLiveViewShorts fallback for', viewName, err && err.message);
+    if (sw) { endShortsWorld(c, sw); sw = false; }
+    sw = beginShortsWorld(c, { focusX: 640 });
+    streetCafeStage(c, 1.5);
+  } finally {
+    if (sw) endShortsWorld(c, sw);
+    window.SHORTS_MODE = prevShorts;
+    window.__HIDE_HUD = prevHide;
+    window.__SHORTS_FOCUS_X = prevFocus;
+    window.__COVER_MODE = prevCover;
+  }
+  return rendered;
+}
 
 function comicBurst(c, cx, cy, rIn, rOut, spikes = 10, fill = '#FACC15', stroke = '#18181B') {
   c.save();
@@ -159,7 +470,7 @@ function comicBurst(c, cx, cy, rIn, rOut, spikes = 10, fill = '#FACC15', stroke 
   c.restore();
 }
 
-function drawSpeedLines(c, cx, cy, count, rIn, rOut, col1, col2) {
+function drawCoverSpeedLines(c, cx, cy, count, rIn, rOut, col1, col2) {
   c.save();
   for (let i = 0; i < count; i++) {
     const a0 = (i / count) * Math.PI * 2;
@@ -177,7 +488,6 @@ function drawSpeedLines(c, cx, cy, count, rIn, rOut, col1, col2) {
 }
 
 function drawStickerChar(c, x, y, scale, opts) {
-  // Offscreen dimensions match target canvas (works identically for 1920x1080 & 1080x1920)
   const cw = c.canvas.width, ch = c.canvas.height;
   const off = document.createElement('canvas');
   off.width = cw; off.height = ch;
@@ -261,69 +571,123 @@ function drawStickerBadge(c, x, y, rotDeg, bg, borderCol, line1, line2, l1Col = 
   c.restore();
 }
 
+// =============================================================================
+//  1. 16:9 MAIN COVER — Torn-Paper Expectation vs. In-Scene Reality Chaos
+// =============================================================================
 window.renderShowdownThumb = (cfg) => {
   const cv = document.getElementById('cv');
   cv.width = 1920; cv.height = 1080;
   const c = cv.getContext('2d');
 
-  // 1. Diagonal split contrast background + radial comic speed-lines
-  const bgL = c.createRadialGradient(560, 480, 60, 560, 480, 980);
-  bgL.addColorStop(0, cfg.leftBg[0]); bgL.addColorStop(0.45, cfg.leftBg[1]); bgL.addColorStop(1, cfg.leftBg[2]);
-  c.fillStyle = bgL; c.fillRect(0, 0, 1920, 1080);
+  if (window.COVER_RENDERERS && typeof window.COVER_RENDERERS.showdown === 'function') {
+    window.COVER_RENDERERS.showdown(c, cfg);
+    return;
+  }
 
+  // 1. Right Side (~67%): Live Reality Chaos Background with cinematic DOF blur so foreground stickers pop
+  const bgBlur = cfg.bgBlur !== undefined ? cfg.bgBlur : (cfg.realityView ? 6.5 : 0);
+  renderLiveView16x9(c, cfg.realityView, cfg.realityLt, cfg.realityDur, 640, 0, 0, 1920, 1080, cfg.realityStage || 'office', bgBlur);
+  c.fillStyle = 'rgba(15, 23, 42, 0.24)';
+  c.fillRect(580, 0, 1340, 1080);
+  drawCoverSpeedLines(c, 1280, 460, 34, 150, 1200, 'rgba(255,255,255,0.08)', 'rgba(0,0,0,0)');
+
+  // 2. Left Side (~33%): Torn-Paper "Expectation" Zone clipped by jagged ridge
+  const ripPts = [
+    [650, -10], [620, 180], [660, 360], [605, 540], [645, 720], [590, 1090]
+  ];
   c.save();
-  c.beginPath(); c.moveTo(1080, 0); c.lineTo(1920, 0); c.lineTo(1920, 1080); c.lineTo(860, 1080); c.closePath(); c.clip();
-  const bgR = c.createRadialGradient(1420, 460, 60, 1420, 460, 880);
-  bgR.addColorStop(0, cfg.rightBg[0]); bgR.addColorStop(0.55, cfg.rightBg[1]); bgR.addColorStop(1, cfg.rightBg[2]);
-  c.fillStyle = bgR; c.fillRect(0, 0, 1920, 1080);
-  c.restore();
-
-  drawSpeedLines(c, 960, 460, 36, 120, 1400, 'rgba(255,255,255,0.11)', 'rgba(0,0,0,0)');
-
-  // Electric diagonal lightning crack
-  c.save();
-  c.strokeStyle = '#FEF08A'; c.lineWidth = 14; c.lineJoin = 'round';
-  c.shadowColor = '#FACC15'; c.shadowBlur = 26;
   c.beginPath();
-  c.moveTo(1080, -10); c.lineTo(990, 260); c.lineTo(1065, 310); c.lineTo(920, 610); c.lineTo(985, 650); c.lineTo(845, 1090);
-  c.stroke();
-  c.strokeStyle = '#FFFFFF'; c.lineWidth = 6; c.stroke();
+  c.moveTo(0, -10);
+  for (const [rx, ry] of ripPts) c.lineTo(rx, ry);
+  c.lineTo(0, 1090);
+  c.closePath();
+  c.save();
+  c.shadowColor = 'rgba(0,0,0,0.65)'; c.shadowBlur = 24; c.shadowOffsetX = 12;
+  c.fillStyle = '#FFFFFF'; c.fill();
+  c.restore();
+  c.clip();
+
+  const expBlur = cfg.expectBlur !== undefined ? cfg.expectBlur : (cfg.expectView ? 5.0 : 0);
+  renderLiveView16x9(c, cfg.expectView, cfg.expectLt, cfg.expectDur, 640, 0, 0, 1920, 1080, cfg.expectStage || 'cafe', expBlur);
+  glow(c, 340, 430, 520, '#FDE047', 0.36);
+  c.fillStyle = 'rgba(254, 240, 138, 0.16)';
+  c.fillRect(0, 0, 700, 1080);
+  for (const [sx, sy, sr] of [[120, 310, 22], [510, 260, 26], [520, 520, 18], [135, 620, 16]]) {
+    drawSparkleVec(c, sx, sy, sr, '#FEF9C3', '#F59E0B', false);
+  }
+
+  // Smug sunglasses hero inside left Expectation strip
+  const expC = cfg.expectChar || {};
+  drawStickerChar(c, 325, 1215, 3.25, Object.assign({
+    t: 1.8, dir: 1, cast: 'ton', expr: 'happy', sunglasses: true
+  }, expC, {
+    pose: resolvePose(expC.pose || 'smug', 1.8)
+  }));
   c.restore();
 
-  // 2. Huge White-Sticker-Outlined Hero Characters
-  drawStickerChar(c, 500, 1210, 3.65, Object.assign({
-    t: 1.8, dir: 1, cast: 'ton', expr: 'shock', darkCircles: true, tear: true, sweat: true,
-    pose: { lean: 0.08, by: 0, arms: [{ a: 1.48, b: 0.25 }, { a: 0.35, b: 0.75 }], legs: [{ a: 0, b: 0 }, { a: 0, b: 0 }] }
-  }, cfg.leftChar || {}));
+  // Crisp jagged white torn-paper border down ridge
+  c.save();
+  c.lineJoin = 'round'; c.lineCap = 'round';
+  c.strokeStyle = '#FFFFFF'; c.lineWidth = 14;
+  c.beginPath();
+  ripPts.forEach(([rx, ry], idx) => idx === 0 ? c.moveTo(rx, ry) : c.lineTo(rx, ry));
+  c.stroke();
+  c.strokeStyle = '#CBD5E1'; c.lineWidth = 3;
+  c.beginPath();
+  ripPts.forEach(([rx, ry], idx) => idx === 0 ? c.moveTo(rx - 4, ry) : c.lineTo(rx - 4, ry));
+  c.stroke();
+  c.restore();
 
-  drawStickerChar(c, 1455, 1215, 3.60, Object.assign({
-    t: 1.8, dir: -1, cast: 'boss', expr: 'shock',
-    pose: { lean: -0.06, by: 0, arms: [{ a: 1.05, b: 0.65 }, { a: 0.3, b: 0.4 }], legs: [{ a: 0, b: 0 }, { a: 0, b: 0 }] }
-  }, cfg.rightChar || {}));
-
-  // 3. Center Comic Burst
-  if (cfg.centerBurst) {
-    c.save(); c.translate(970, 360); c.rotate(-0.08);
-    comicBurst(c, 0, 0, 86, 124, 11, '#FFFFFF', '#18181B');
-    comicBurst(c, 0, 0, 72, 108, 11, '#FACC15', '#18181B');
-    drawStrokedText(c, cfg.centerBurst, 0, 22, fitFontSize(c, cfg.centerBurst, 195, 58, 30), '#DC2626', 10, 'center', '#FFFFFF');
-    c.restore();
-  }
-
-  // 4. Two Tilted Corner Shock Sticker Badges
+  // Top-left Expectation tag + badge (with vector sparkle, zero unicode emoji)
+  c.save(); c.translate(155, 68);
+  inkrr(c, -110, -28, 220, 56, 14, '#FACC15', 4, INK_OUTLINE);
+  txt(c, cfg.expectTag || 'สิ่งที่คิด', -24, 10, 28, INK_OUTLINE, 900, 'center');
+  drawSparkleVec(c, 68, 0, 14, '#FFFFFF', '#B45309', false);
+  c.restore();
   if (cfg.leftBadge) {
-    drawStickerBadge(c, 245, 148, -6, cfg.leftBadge.bg, '#18181B', cfg.leftBadge.line1, cfg.leftBadge.line2, cfg.leftBadge.l1Col, cfg.leftBadge.l2Col, 390, 118);
-  }
-  if (cfg.rightBadge) {
-    drawStickerBadge(c, 1675, 148, 5, cfg.rightBadge.bg, '#18181B', cfg.rightBadge.line1, cfg.rightBadge.line2, cfg.rightBadge.l1Col, cfg.rightBadge.l2Col, 395, 118);
+    drawStickerBadge(c, 275, 182, -5, cfg.leftBadge.bg || '#16A34A', '#18181B',
+      cfg.leftBadge.line1, cfg.leftBadge.line2, cfg.leftBadge.l1Col, cfg.leftBadge.l2Col, 370, 112);
   }
 
-  // 5. Bottom Dark Scrim + Series Pill + Giant 2-Tone Headline
-  const botG = c.createLinearGradient(0, 670, 0, 1080);
+  // Right-side Macro Diegetic Evidence Phone OR Top-Right Shock Badge
+  if (cfg.evidencePhone) {
+    drawEvidencePhone(c, 1395, 420, Object.assign({ scale: 0.88, rot: 0.05 }, cfg.evidencePhone));
+  } else {
+    if (cfg.rightBadge) {
+      drawStickerBadge(c, 1685, 122, 4, cfg.rightBadge.bg || '#1E293B', '#18181B',
+        cfg.rightBadge.line1, cfg.rightBadge.line2, cfg.rightBadge.l1Col, cfg.rightBadge.l2Col, 375, 110);
+    }
+    if (cfg.centerBurst) {
+      c.save(); c.translate(1365, 250); c.rotate(-0.07);
+      comicBurst(c, 0, 0, 92, 134, 11, '#FFFFFF', '#18181B');
+      comicBurst(c, 0, 0, 78, 116, 11, '#FACC15', '#18181B');
+      drawStrokedText(c, cfg.centerBurst, 0, 16, fitFontSize(c, cfg.centerBurst, 148, 44, 24), '#DC2626', 8, 'center', '#FFFFFF');
+      c.restore();
+    }
+  }
+
+  // 3. Center-Right Panicked Hero (natural posePanic + gloom + ghost soul) + Far-Right Foil (posePoint)
+  const heroC = cfg.heroChar || {};
+  drawStickerChar(c, 1020, 1225, 3.55, Object.assign({
+    t: 1.8, dir: 1, cast: 'ton', expr: 'shock', darkCircles: true, tear: true, sweat: true, gloom: 0.52
+  }, heroC, {
+    pose: resolvePose(heroC.pose || 'panic', 1.8)
+  }));
+  drawSoulEscape(c, 1185, 435, 1.5, 0.95);
+
+  const rightC = cfg.rightChar || {};
+  drawStickerChar(c, 1680, 1220, 3.30, Object.assign({
+    t: 1.8, dir: -1, cast: 'boss', expr: 'annoyed'
+  }, rightC, {
+    pose: resolvePose(rightC.pose || 'point', 1.8)
+  }));
+
+  // 4. Bottom Dark Scrim + Series Pill (zero emojis) + Giant 2-Tone Kanit 900 Headline + Sub-Hook
+  const botG = c.createLinearGradient(0, 660, 0, 1080);
   botG.addColorStop(0, 'rgba(9,9,11,0)');
-  botG.addColorStop(0.42, 'rgba(9,9,11,0.78)');
-  botG.addColorStop(1, 'rgba(9,9,11,0.96)');
-  c.fillStyle = botG; c.fillRect(0, 670, 1920, 410);
+  botG.addColorStop(0.40, 'rgba(9,9,11,0.80)');
+  botG.addColorStop(1, 'rgba(9,9,11,0.97)');
+  c.fillStyle = botG; c.fillRect(0, 660, 1920, 420);
 
   if (cfg.seriesPill) {
     c.save();
@@ -355,10 +719,19 @@ window.renderShowdownThumb = (cfg) => {
   }
 };
 
+// =============================================================================
+//  2. 16:9 A/B COVER — 4-Act In-Scene Action 2x2 Comic Grid
+// =============================================================================
 window.render4PanelComicThumb = (cfg) => {
   const cv = document.getElementById('cv');
   cv.width = 1920; cv.height = 1080;
   const c = cv.getContext('2d');
+
+  if (window.COVER_RENDERERS && typeof window.COVER_RENDERERS.comicGrid === 'function') {
+    window.COVER_RENDERERS.comicGrid(c, cfg);
+    return;
+  }
+
   c.fillStyle = '#09090B'; c.fillRect(0, 0, 1920, 1080);
 
   const slots = [
@@ -367,52 +740,72 @@ window.render4PanelComicThumb = (cfg) => {
     { x: 20, y: 550, w: 930, h: 510 },
     { x: 970, y: 550, w: 930, h: 510 }
   ];
+  const fallbackStages = ['cafe', 'office', 'room', 'roomNight'];
 
   slots.forEach((slot, idx) => {
-    const p = cfg.panels[idx] || cfg.panels[0];
+    const p = (cfg.panels && cfg.panels[idx]) || (cfg.panels && cfg.panels[0]) || {};
     c.save();
     rr(c, slot.x, slot.y, slot.w, slot.h, 20);
     c.clip();
-    const g = c.createRadialGradient(slot.x + slot.w * 0.5, slot.y + slot.h * 0.5, 40, slot.x + slot.w * 0.5, slot.y + slot.h * 0.5, 620);
-    g.addColorStop(0, p.bg[0]); g.addColorStop(1, p.bg[1]);
-    c.fillStyle = g; c.fillRect(slot.x, slot.y, slot.w, slot.h);
-    drawSpeedLines(c, slot.x + slot.w * 0.5, slot.y + slot.h * 0.5, 20, 40, 650, 'rgba(255,255,255,0.12)', 'rgba(0,0,0,0)');
 
-    if (p.rightCast) {
-      drawStickerChar(c, slot.x + 260, slot.y + 645, 2.3, {
-        t: 1, dir: 1, cast: p.cast || 'ton', expr: p.expr || 'shock', sweat: true,
-        pose: { lean: 0.05, by: 0, arms: [{ a: 1.4, b: 0.3 }, { a: 0.4, b: 0.6 }], legs: [{ a: 0, b: 0 }, { a: 0, b: 0 }] }
-      });
-      drawStickerChar(c, slot.x + 700, slot.y + 645, 2.3, {
-        t: 1, dir: -1, cast: p.rightCast, expr: 'shock',
-        pose: { lean: -0.04, by: 0, arms: [{ a: 1.1, b: 0.6 }, { a: 0.3, b: 0.4 }], legs: [{ a: 0, b: 0 }, { a: 0, b: 0 }] }
-      });
-      if (p.burst) {
-        c.save(); c.translate(slot.x + 480, slot.y + 280);
-        comicBurst(c, 0, 0, 56, 82, 9, '#FEF08A', '#18181B');
-        drawStrokedText(c, p.burst, 0, 14, 38, '#DC2626', 7, 'center', '#FFFFFF');
-        c.restore();
-      }
+    const useLive = Boolean(p.view && p.useLiveView !== false && window.VIEWS && typeof window.VIEWS[p.view] === 'function');
+    if (useLive) {
+      // Live in-scene render of actual episode view scaled crisply into comic panel
+      renderLiveView16x9(c, p.view, p.lt, p.dur, p.focusX, slot.x, slot.y, slot.w, slot.h, p.stage || fallbackStages[idx]);
+      // Subtle edge contrast vignette so white caption bar pops cleanly
+      const vg = c.createLinearGradient(0, idx < 2 ? slot.y : slot.y + slot.h, 0, idx < 2 ? slot.y + 130 : slot.y + slot.h - 130);
+      vg.addColorStop(0, 'rgba(9,9,11,0.45)');
+      vg.addColorStop(1, 'rgba(9,9,11,0)');
+      c.fillStyle = vg; c.fillRect(slot.x, slot.y, slot.w, slot.h);
     } else {
-      const charRight = idx === 1;
-      const cardX = charRight ? slot.x + 330 : slot.x + 610;
-      const charX = charRight ? slot.x + 720 : slot.x + 235;
+      // Fallback: real built-in sitcom stage + sticker actors + diegetic phone/burst (zero white boxes, zero zombie arms)
       c.save();
-      c.translate(cardX, slot.y + 278); c.rotate(charRight ? -0.04 : 0.04);
-      inkrr(c, -210, -140, 420, 280, 18, '#FFFDF9', 6);
-      c.fillStyle = p.tagBg || '#15803D'; rr(c, -210, -140, 420, 54, [18, 18, 0, 0]); c.fill();
-      c.font = '900 26px "Kanit"'; c.fillStyle = '#FFFFFF'; c.textAlign = 'center';
-      c.fillText(p.cardHeader || '', 0, -104);
-      c.font = '900 ' + fitFontSize(c, p.cardBig || '', 380, 52, 26) + 'px "Kanit"'; c.fillStyle = '#DC2626';
-      c.fillText(p.cardBig || '', 0, 6);
-      c.font = '800 ' + fitFontSize(c, p.cardSub || '', 380, 28, 18) + 'px "Kanit"'; c.fillStyle = '#1E293B';
-      c.fillText(p.cardSub || '', 0, 74);
-      c.restore();
+      c.translate(slot.x, slot.y);
+      c.scale(slot.w / W, slot.h / H);
+      renderLiveView16x9(c, null, 1.5, 6, 640, 0, 0, W, H, p.stage || fallbackStages[idx]);
 
-      drawStickerChar(c, charX, slot.y + 655, 2.35, {
-        t: 1, dir: charRight ? -1 : 1, cast: p.cast || 'ton', expr: p.expr || 'shock', tear: idx === 0 || idx === 3, sweat: true,
-        pose: { lean: charRight ? -0.05 : 0.06, by: 0, arms: [{ a: 2.1, b: 0.6 }, { a: 0.6, b: 0.8 }], legs: [{ a: 0, b: 0 }, { a: 0, b: 0 }] }
-      });
+      if (p.rightCast) {
+        drawStickerPerson(c, 370, 645, 1.60, {
+          t: 1.5, dir: 1, cast: p.cast || 'ton', expr: p.expr || 'shock', sweat: true, gloom: 0.45,
+          pose: posePanic(1.5), shadow: false
+        }, 6);
+        drawStickerPerson(c, 960, 645, 1.58, {
+          t: 1.5, dir: -1, cast: p.rightCast, expr: 'annoyed',
+          pose: posePoint(1.5), shadow: false
+        }, 6);
+        if (p.burst) drawComicBurst(c, 660, 290, p.burst, { scale: 0.92 });
+      } else {
+        const charRight = idx === 1;
+        drawEvidencePhone(c, charRight ? 420 : 850, 385, Object.assign({
+          scale: 0.68, rot: charRight ? -0.05 : 0.05,
+          headerCol: p.tagBg || '#BE185D',
+          app: p.cardHeader || 'แจ้งเตือน',
+          account: 'LIVE',
+          subtitle: p.cardSub || 'สถานะล่าสุด',
+          amount: p.cardBig || 'พังยับ!!',
+          amountCol: '#DC2626',
+          merchant: p.tag || '',
+          errorTitle: p.cardBig || 'ช็อกหนักมาก!',
+          errorSub: p.cardSub || ''
+        }, p.phone || {}));
+        drawStickerPerson(c, charRight ? 920 : 380, 650, 1.62, {
+          t: 1.5, dir: charRight ? -1 : 1, cast: p.cast || 'ton', expr: p.expr || 'shock',
+          tear: idx === 0 || idx === 3, sweat: true, gloom: 0.48,
+          pose: idx === 3 ? poseFacepalm(1.5) : posePanic(1.5), shadow: false
+        }, 6);
+      }
+      c.restore();
+    }
+
+    // Optional explicit diegetic accents inside live panel
+    if (p.overlayPhone || p.overlayBubble || p.overlayBurst) {
+      c.save();
+      c.translate(slot.x, slot.y);
+      c.scale(slot.w / W, slot.h / H);
+      if (p.overlayPhone) drawEvidencePhone(c, p.overlayPhone.x || 940, p.overlayPhone.y || 390, Object.assign({ scale: 0.66 }, p.overlayPhone));
+      if (p.overlayBubble) drawSpeechBubble(c, p.overlayBubble.x || 960, p.overlayBubble.y || 225, p.overlayBubble.text || '', p.overlayBubble);
+      if (p.overlayBurst) drawComicBurst(c, p.overlayBurst.x || 990, p.overlayBurst.y || 315, p.overlayBurst.text || '', p.overlayBurst);
+      c.restore();
     }
 
     // Caption bar at TOP for panels 1-2, BOTTOM for panels 3-4 (zero overlap with center medallion!)
@@ -441,65 +834,94 @@ window.render4PanelComicThumb = (cfg) => {
 
   const yg = c.createLinearGradient(0, -55, 0, 30);
   yg.addColorStop(0, '#FEF08A'); yg.addColorStop(0.6, '#FACC15'); yg.addColorStop(1, '#F97316');
-  drawStrokedText(c, cfg.centerTitle, 0, 12, fitFontSize(c, cfg.centerTitle, 830, 74, 42), yg, 14, 'center', '#000000');
-  drawStrokedText(c, cfg.centerSub, 0, 68, fitFontSize(c, cfg.centerSub, 830, 34, 22), '#FFFFFF', 8, 'center', '#000000');
+  drawStrokedText(c, cfg.centerTitle || '', 0, 12, fitFontSize(c, cfg.centerTitle || '', 830, 74, 42), yg, 14, 'center', '#000000');
+  drawStrokedText(c, cfg.centerSub || '', 0, 68, fitFontSize(c, cfg.centerSub || '', 830, 34, 22), '#FFFFFF', 8, 'center', '#000000');
   c.restore();
 };
 
+// =============================================================================
+//  3. 9:16 VERTICAL SHORTS COVERS — Full-Bleed In-Scene Storytelling Covers
+// =============================================================================
 window.renderShortsCover = (cfg) => {
   const cv = document.getElementById('cv');
   cv.width = 1080; cv.height = 1920;
   const c = cv.getContext('2d');
 
-  const g = c.createRadialGradient(540, 1080, 80, 540, 1080, 1200);
-  g.addColorStop(0, cfg.bg[0]); g.addColorStop(0.55, cfg.bg[1]); g.addColorStop(1, cfg.bg[2]);
-  c.fillStyle = g; c.fillRect(0, 0, 1080, 1920);
-  drawSpeedLines(c, 540, 1060, 28, 110, 1400, 'rgba(255,255,255,0.11)', 'rgba(0,0,0,0)');
-
-  if (cfg.rightCast) {
-    drawStickerChar(c, 265, 1790, 3.25, {
-      t: 1.8, dir: 1, cast: cfg.cast || 'ton', expr: 'shock', sweat: true,
-      pose: { lean: 0.06, by: 0, arms: [{ a: 1.4, b: 0.3 }, { a: 0.4, b: 0.6 }], legs: [{ a: 0, b: 0 }, { a: 0, b: 0 }] }
-    });
-    drawStickerChar(c, 830, 1790, 3.25, {
-      t: 1.8, dir: -1, cast: cfg.rightCast, expr: 'shock',
-      pose: { lean: -0.05, by: 0, arms: [{ a: 1.1, b: 0.6 }, { a: 0.3, b: 0.4 }], legs: [{ a: 0, b: 0 }, { a: 0, b: 0 }] }
-    });
-    if (cfg.burst) {
-      c.save(); c.translate(540, 1010);
-      comicBurst(c, 0, 0, 82, 122, 11, '#FFFFFF', '#18181B');
-      comicBurst(c, 0, 0, 68, 104, 11, '#FACC15', '#18181B');
-      drawStrokedText(c, cfg.burst, 0, 20, fitFontSize(c, cfg.burst, 190, 56, 30), '#DC2626', 10, 'center', '#FFFFFF');
-      c.restore();
-    }
-  } else {
-    c.save(); c.translate(540, 1020); c.rotate(-0.03);
-    inkrr(c, -330, -210, 660, 420, 26, '#FFFDF9', 7);
-    c.fillStyle = '#1E293B'; rr(c, -330, -210, 660, 74, [26, 26, 0, 0]); c.fill();
-    c.font = '900 ' + fitFontSize(c, cfg.cardHeader || '', 600, 34, 22) + 'px "Kanit"'; c.fillStyle = '#FACC15'; c.textAlign = 'center';
-    c.fillText(cfg.cardHeader || '', 0, -162);
-    c.font = '900 ' + fitFontSize(c, cfg.cardBig || '', 600, 68, 34) + 'px "Kanit"'; c.fillStyle = '#DC2626';
-    c.fillText(cfg.cardBig || '', 0, -18);
-    c.font = '800 ' + fitFontSize(c, cfg.cardSub || '', 600, 36, 22) + 'px "Kanit"'; c.fillStyle = '#1E293B';
-    c.fillText(cfg.cardSub || '', 0, 96);
-    c.restore();
-    drawStickerChar(c, 540, 2120, 3.6, {
-      t: 2, dir: 1, cast: cfg.cast || 'ton', expr: 'shock', tear: true, sweat: true,
-      pose: { lean: 0.04, by: 0, arms: [{ a: 2.2, b: 0.6 }, { a: 2.1, b: -0.6 }], legs: [{ a: 0, b: 0 }, { a: 0, b: 0 }] }
-    });
+  if (window.COVER_RENDERERS && typeof window.COVER_RENDERERS.shorts === 'function') {
+    window.COVER_RENDERERS.shorts(c, cfg);
+    return;
   }
 
-  // Smooth top dark scrim + 2-line two-tone high-CTR title
-  const topG = c.createLinearGradient(0, 0, 0, 620);
-  topG.addColorStop(0, 'rgba(9,9,11,0.92)'); topG.addColorStop(0.62, 'rgba(9,9,11,0.58)'); topG.addColorStop(1, 'rgba(9,9,11,0)');
-  c.fillStyle = topG; c.fillRect(0, 0, 1080, 620);
+  const useLive = Boolean(cfg.view && cfg.useLiveView !== false && window.VIEWS && typeof window.VIEWS[cfg.view] === 'function');
+  if (useLive) {
+    // Full-bleed live scene in authentic 9:16 Shorts World Mode (zero distortion, HUD hidden)
+    renderLiveViewShorts(c, cfg.view, cfg.lt, cfg.dur, cfg.focusX, cfg.stage || 'cafe');
+    if (cfg.evidencePhone) {
+      drawEvidencePhone(c, cfg.evidencePhone.x || 770, cfg.evidencePhone.y || 960, Object.assign({ scale: 1.05, rot: 0.04 }, cfg.evidencePhone));
+    }
+    if (cfg.bubble) {
+      drawSpeechBubble(c, cfg.bubble.x || 540, cfg.bubble.y || 1040, cfg.bubble.text || '', Object.assign({ size: 22 }, cfg.bubble));
+    }
+    if (cfg.soul) {
+      drawSoulEscape(c, cfg.soul.x || 720, cfg.soul.y || 1080, 1.5, cfg.soul.scale || 1.1);
+    }
+  } else {
+    // Fallback: Built-in vertical sitcom stage + foreground white-sticker characters + diegetic proof
+    renderLiveViewShorts(c, null, 1.5, 6, 640, cfg.stage || 'cafe');
+    c.fillStyle = 'rgba(15, 23, 42, 0.20)';
+    c.fillRect(0, 0, 1080, 1920);
+    drawCoverSpeedLines(c, 540, 1060, 28, 120, 1300, 'rgba(255,255,255,0.08)', 'rgba(0,0,0,0)');
 
-  const yGrad = c.createLinearGradient(0, 350, 0, 500);
+    if (cfg.rightCast) {
+      drawStickerChar(c, 275, 1860, 3.25, {
+        t: 1.8, dir: 1, cast: cfg.cast || 'ton', expr: 'shock', darkCircles: true, tear: true, sweat: true, gloom: 0.50,
+        pose: posePanic(1.8)
+      });
+      drawStickerChar(c, 815, 1860, 3.20, {
+        t: 1.8, dir: -1, cast: cfg.rightCast, expr: 'annoyed',
+        pose: posePoint(1.8)
+      });
+      if (cfg.burst) {
+        c.save(); c.translate(540, 960);
+        comicBurst(c, 0, 0, 82, 122, 11, '#FFFFFF', '#18181B');
+        comicBurst(c, 0, 0, 68, 104, 11, '#FACC15', '#18181B');
+        drawStrokedText(c, cfg.burst, 0, 20, fitFontSize(c, cfg.burst, 190, 54, 28), '#DC2626', 10, 'center', '#FFFFFF');
+        c.restore();
+      }
+    } else {
+      drawEvidencePhone(c, 680, 980, Object.assign({
+        scale: 1.25, rot: -0.04,
+        headerCol: '#BE185D',
+        app: cfg.cardHeader || 'แจ้งเตือนด่วน',
+        account: 'LIVE',
+        subtitle: cfg.cardSub || 'เหตุการณ์จริง',
+        amount: cfg.cardBig || 'ช็อก!!',
+        amountCol: '#DC2626',
+        merchant: cfg.line1 || '',
+        errorTitle: cfg.line2 || 'พังยับ!',
+        errorSub: cfg.cardSub || ''
+      }, cfg.evidencePhone || {}));
+      drawStickerChar(c, 340, 1910, 3.55, {
+        t: 1.8, dir: 1, cast: cfg.cast || 'ton', expr: 'shock', darkCircles: true, tear: true, sweat: true, gloom: 0.52,
+        pose: posePanic(1.8)
+      });
+      drawSoulEscape(c, 520, 1180, 1.5, 1.1);
+    }
+  }
+
+  // Smooth top dark scrim + Clean 2-Line Two-Tone High-CTR Title (ZERO pills, ZERO bottom stamps, ZERO emojis)
+  const topG = c.createLinearGradient(0, 0, 0, 560);
+  topG.addColorStop(0, 'rgba(9,9,11,0.92)');
+  topG.addColorStop(0.62, 'rgba(9,9,11,0.58)');
+  topG.addColorStop(1, 'rgba(9,9,11,0)');
+  c.fillStyle = topG; c.fillRect(0, 0, 1080, 560);
+
+  const yGrad = c.createLinearGradient(0, 310, 0, 440);
   yGrad.addColorStop(0, '#FEF08A'); yGrad.addColorStop(0.55, '#FACC15'); yGrad.addColorStop(1, '#F97316');
-  const s1 = fitFontSize(c, cfg.line1 || '', 960, cfg.size1 || 104, 58);
-  const s2 = fitFontSize(c, cfg.line2 || '', 960, cfg.size2 || 106, 58);
-  drawStrokedText(c, cfg.line1 || '', 540, 320, s1, '#FFFFFF', 22, 'center', '#09090B');
-  drawStrokedText(c, cfg.line2 || '', 540, 455, s2, yGrad, 22, 'center', '#09090B');
+  const s1 = fitFontSize(c, cfg.line1 || '', 960, cfg.size1 || 96, 54);
+  const s2 = fitFontSize(c, cfg.line2 || '', 960, cfg.size2 || 100, 54);
+  drawStrokedText(c, cfg.line1 || '', 540, 265, s1, '#FFFFFF', 22, 'center', '#09090B');
+  drawStrokedText(c, cfg.line2 || '', 540, 395, s2, yGrad, 22, 'center', '#09090B');
 };
 </script>
 </body>
@@ -507,33 +929,35 @@ window.renderShortsCover = (cfg) => {
 }
 
 (async () => {
+  fs.mkdirSync(outDir, { recursive: true });
   const browser = await puppeteer.launch({
     ...(findChrome() ? { executablePath: findChrome() } : {}),
     headless: 'new',
     args: ['--no-sandbox', '--disable-gpu', '--allow-file-access-from-files']
   });
   const page = await browser.newPage();
+  page.on('pageerror', err => console.error('PageError:', err.message));
   await page.setViewport({ width: 1920, height: 1080, deviceScaleFactor: 1 });
   await page.setContent(buildThumbnailHtml(), { waitUntil: 'load' });
   await page.evaluate(() => document.fonts.ready);
 
   await page.evaluate(cfg => window.renderShowdownThumb(cfg), showdownCfg);
-  const out1 = path.join(projectDir, 'thumbnail_reallens_showdown.png');
+  const out1 = path.join(outDir, 'thumbnail_reallens_showdown.png');
   await page.screenshot({ path: out1, clip: { x: 0, y: 0, width: 1920, height: 1080 } });
   console.log('✓ Saved High-CTR Thumbnail 1:', out1);
 
   await page.evaluate(cfg => window.render4PanelComicThumb(cfg), comicGridCfg);
-  const out2 = path.join(projectDir, 'thumbnail_reallens_5panel.png');
+  const out2 = path.join(outDir, 'thumbnail_reallens_5panel.png');
   await page.screenshot({ path: out2, clip: { x: 0, y: 0, width: 1920, height: 1080 } });
   console.log('✓ Saved High-CTR Thumbnail 2:', out2);
 
   const coverCfgs = buildShortsCoverConfigs();
   if (coverCfgs.length > 0) {
-    fs.mkdirSync(path.join(projectDir, 'shorts'), { recursive: true });
+    fs.mkdirSync(path.join(outDir, 'shorts'), { recursive: true });
     await page.setViewport({ width: 1080, height: 1920, deviceScaleFactor: 1 });
     for (const cfg of coverCfgs) {
       await page.evaluate(c => window.renderShortsCover(c), cfg);
-      const outC = path.join(projectDir, 'shorts', cfg.outFile);
+      const outC = path.join(outDir, 'shorts', cfg.outFile);
       await page.screenshot({ path: outC, clip: { x: 0, y: 0, width: 1080, height: 1920 } });
       console.log('✓ Saved High-CTR Shorts Cover:', outC);
     }

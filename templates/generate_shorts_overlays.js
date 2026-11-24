@@ -116,9 +116,12 @@ const HTML = `<!DOCTYPE html>
 <head>
   <meta charset="UTF-8">
   <style>
-    @font-face { font-family: "Kanit"; font-weight: 400; src: url("../assets/fonts/kanit-thai-400-normal.woff2") format("woff2"); }
-    @font-face { font-family: "Kanit"; font-weight: 700; src: url("../assets/fonts/kanit-thai-700-normal.woff2") format("woff2"); }
-    @font-face { font-family: "Kanit"; font-weight: 900; src: url("../assets/fonts/kanit-thai-900-normal.woff2") format("woff2"); }
+    @font-face { font-family: "Kanit"; font-weight: 400; src: url("../assets/fonts/kanit-thai-400-normal.woff2") format("woff2"); unicode-range: U+0E00-0E7F, U+200C-200D, U+25CC; }
+    @font-face { font-family: "Kanit"; font-weight: 400; src: url("../assets/fonts/kanit-latin-400-normal.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+    @font-face { font-family: "Kanit"; font-weight: 700; src: url("../assets/fonts/kanit-thai-700-normal.woff2") format("woff2"); unicode-range: U+0E00-0E7F, U+200C-200D, U+25CC; }
+    @font-face { font-family: "Kanit"; font-weight: 700; src: url("../assets/fonts/kanit-latin-700-normal.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+    @font-face { font-family: "Kanit"; font-weight: 900; src: url("../assets/fonts/kanit-thai-900-normal.woff2") format("woff2"); unicode-range: U+0E00-0E7F, U+200C-200D, U+25CC; }
+    @font-face { font-family: "Kanit"; font-weight: 900; src: url("../assets/fonts/kanit-latin-900-normal.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { width: 1080px; height: 1920px; background: transparent; overflow: hidden; font-family: 'Kanit', sans-serif; }
     canvas { width: 1080px; height: 1920px; display: block; }

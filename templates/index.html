@@ -8,7 +8,7 @@
 >
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=1280, height=720" />
+<meta name="viewport" content="width=1920, height=1080" />
 <title>Thai Adult Sitcom Animation (HyperFrames)</title>
 <script src="assets/vendor/gsap.min.js"></script>
 <style>
@@ -62,8 +62,8 @@
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body {
-    width: 1280px;
-    height: 720px;
+    width: 1920px;
+    height: 1080px;
     background: #F5E6C8;
     color: #18181B;
     font-family: "Kanit", sans-serif;
@@ -72,8 +72,8 @@
   }
   #root {
     position: relative;
-    width: 1280px;
-    height: 720px;
+    width: 1920px;
+    height: 1080px;
     overflow: hidden;
     background: #F5E6C8;
   }
@@ -81,8 +81,8 @@
     position: absolute;
     left: 0;
     top: 0;
-    width: 1280px;
-    height: 720px;
+    width: 1920px;
+    height: 1080px;
     background: #F5E6C8;
     display: block;
     z-index: 1;
@@ -96,9 +96,9 @@
   data-composition-id="main"
   data-start="0"
   data-duration="30"
-  data-width="1280"
-  data-height="720"
-  data-fps="24"
+  data-width="1920"
+  data-height="1080"
+  data-fps="30"
 >
   <canvas
     id="stage"
@@ -108,8 +108,8 @@
     data-track-index="0"
     data-layout-ignore
     data-hold
-    width="1280"
-    height="720"
+    width="1920"
+    height="1080"
   ></canvas>
   <audio
     id="master-audio"
@@ -135,12 +135,11 @@
   const SCENES = TL.scenes || [];
 
   const rootEl = document.getElementById('root');
+  const DEFAULT_W = Number(rootEl && rootEl.getAttribute('data-width')) || 1920;
+  const DEFAULT_H = Number(rootEl && rootEl.getAttribute('data-height')) || 1080;
+  window.__RENDER_SCALE = DEFAULT_W / W;
 
-  function setShortsMode(enabled) {
-    const on = Boolean(enabled);
-    window.SHORTS_MODE = on;
-    const cw = on ? 1080 : 1280;
-    const ch = on ? 1920 : 720;
+  function applyBoxSize(cw, ch) {
     cvs.width = cw;
     cvs.height = ch;
     cvs.style.width = cw + 'px';
@@ -153,6 +152,24 @@
     document.documentElement.style.height = ch + 'px';
     document.body.style.width = cw + 'px';
     document.body.style.height = ch + 'px';
+  }
+
+  function setRenderResolution(rw, rh) {
+    const cw = Math.max(320, Number(rw) || DEFAULT_W);
+    const ch = Math.max(180, Number(rh) || DEFAULT_H);
+    window.SHORTS_MODE = false;
+    window.__RENDER_SCALE = cw / W;
+    applyBoxSize(cw, ch);
+  }
+  window.setRenderResolution = setRenderResolution;
+
+  function setShortsMode(enabled) {
+    const on = Boolean(enabled);
+    window.SHORTS_MODE = on;
+    const cw = on ? 1080 : DEFAULT_W;
+    const ch = on ? 1920 : DEFAULT_H;
+    window.__RENDER_SCALE = on ? 1 : (cw / W);
+    applyBoxSize(cw, ch);
   }
   window.setShortsMode = setShortsMode;
 
@@ -180,12 +197,17 @@
     const s = findScene(t);
     if (!s) return;
     const lt = Math.max(0, t - s.start);
-    const cw = window.SHORTS_MODE ? 1080 : W;
-    const ch = window.SHORTS_MODE ? 1920 : H;
+    const shorts = Boolean(window.SHORTS_MODE);
+    const physW = cvs.width || (shorts ? 1080 : DEFAULT_W);
+    const physH = cvs.height || (shorts ? 1920 : DEFAULT_H);
+    const rs = shorts ? 1 : (physW / W);
+    window.__RENDER_SCALE = rs;
+    const logW = shorts ? physW : W;
+    const logH = shorts ? physH : H;
 
     ctx.save();
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.clearRect(0, 0, cw, ch);
+    ctx.setTransform(rs, 0, 0, rs, 0, 0);
+    ctx.clearRect(0, 0, logW, logH);
 
     const viewMap = window.VIEWS || (typeof VIEWS !== 'undefined' ? VIEWS : {});
     const fn = viewMap[s.view] || viewMap[SCENES[0].view];
@@ -222,7 +244,7 @@
 
     if (edgeFade < 1) {
       ctx.fillStyle = `rgba(24,24,27,${(1 - edgeFade) * 0.25})`;
-      ctx.fillRect(0, 0, cw, ch);
+      ctx.fillRect(0, 0, logW, logH);
     }
 
     if (!window.__HIDE_HUD) drawSub(ctx, s, lt);

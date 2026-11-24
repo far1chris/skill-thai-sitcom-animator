@@ -52,13 +52,13 @@ const VIEWS = {
     if (lt < 1.2) {
       cameraRig(c, lt, 1.2, { zoomFrom: 1.02, zoomTo: 1.08, focusX: 520, focusY: 410 }, () => {
         blurLayer(c, 2.0, (bc) => {
-          streetCafeStage(bc, lt, {
+          streetCafeStage(bc, 0, {
             pan: 0,
             shopTitle: 'COFFEE & BAKERY',
             signs: ['ซอยสุขุมวิท 21', 'ถ.อโศกมนตรี', 'คาเฟ่เปิดใหม่'],
             chalkLines: ["Today's Special", 'ยูซุอเมริกาโน่', 'แก้วละ 145.-', 'รับเฉพาะโอน']
           });
-        });
+        }, '', 'cafe_static_v02');
 
         drawBicycle(c, 325, 635, 1.26, { t: 0, speed: 0, dir: 1, rider: false });
         drawSitcomPerson(c, 535, 625, 1.48, {
@@ -71,7 +71,8 @@ const VIEWS = {
 
     cameraRig(c, lt, s.dur, { snapAt: 1.2, snapScale: isShortsMode() ? 1.05 : 1.08, shakeAt: 1.2, shakeAmp: 5, focusX: 640, focusY: 360 }, () => {
       punchEvidenceCutIn(c, lt, {
-        bgFn: (bc, t) => streetCafeStage(bc, t, { pan: 0, shopTitle: 'COFFEE & BAKERY', signs: [] }),
+        bgCacheKey: 'cafe_evid_v02',
+        bgFn: (bc) => streetCafeStage(bc, 0, { pan: 0, shopTitle: 'COFFEE & BAKERY', signs: [] }),
         phone: {
           app: 'K-PLUS',
           account: 'ออมทรัพย์',
@@ -100,13 +101,13 @@ const VIEWS = {
         c,
         lt,
         (ctx, t) => {
-          blurLayer(ctx, 2.0, (bc) => { streetCafeStage(bc, t, { pan: 0, chalkboard: false }); });
+          blurLayer(ctx, 2.0, (bc) => { streetCafeStage(bc, 0, { pan: 0, chalkboard: false }); }, '', 'cafe_split_v03');
           drawSitcomPerson(ctx, 360, 650, 1.56, {
             t, cast: 'ton', dir: 1, expr: 'shock', sweat: true, phone: true, talking: t < (s.voDur || 5)
           });
         },
         (ctx, t) => {
-          blurLayer(ctx, 2.0, (bc) => { officeStage(bc, t, { deskX: 740, boardTitle: '08:30 ประชุมด่วน!' }); });
+          blurLayer(ctx, 2.0, (bc) => { officeStage(bc, 0, { deskX: 740, boardTitle: '08:30 ประชุมด่วน!' }); }, '', 'office_split_v03');
           drawSitcomPerson(ctx, 940, 645, 1.54, {
             t, cast: 'boss', dir: -1, expr: 'annoyed', phone: true, pose: posePoint(t)
           });
@@ -121,9 +122,10 @@ const VIEWS = {
     cameraRig(c, lt, s.dur, { snapAt: 1.8, snapScale: 1.12, focusX: 600, focusY: 280 }, () => {
       punchDeadpanZoom(c, lt, {
         at: 1.8,
-        bgFn: (bc, t) => {
-          streetCafeStage(bc, t, { pan: 0, shopTitle: 'COFFEE & BAKERY', signs: [] });
-          drawSitcomPerson(bc, 210, 625, 1.56, { t, cast: 'barista', dir: 1, expr: 'deadpan', coffee: true });
+        bgCacheKey: 'cafe_deadpan_v03',
+        bgFn: (bc) => {
+          streetCafeStage(bc, 0, { pan: 0, shopTitle: 'COFFEE & BAKERY', signs: [] });
+          drawSitcomPerson(bc, 210, 625, 1.56, { t: 0, cast: 'barista', dir: 1, expr: 'deadpan', coffee: true });
         },
         hero: { t: lt, cast: 'ton', expr: 'deadpan', darkCircles: true, sweat: true }
       });

@@ -55,6 +55,19 @@ function applyShortsRigComp(c) {
 function endShortsRigComp(applied) {
   if (applied) _inShortsRig = false;
 }
+function getRenderScale() {
+  if (_inShortsWorld || isShortsMode()) return 1;
+  if (typeof window !== 'undefined' && typeof window.__RENDER_SCALE === 'number' && window.__RENDER_SCALE > 0) {
+    return window.__RENDER_SCALE;
+  }
+  return 1;
+}
+function ensureOffscreenSize(cv, rs = 1) {
+  if (!cv) return false;
+  const tw = Math.round(W * rs), th = Math.round(H * rs);
+  if (cv.width !== tw || cv.height !== th) { cv.width = tw; cv.height = th; }
+  return true;
+}
 
 function hex2rgb(h) { h = h.replace('#', ''); return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]; }
 function mix(a, b, k) { const A = hex2rgb(a), B = hex2rgb(b); return `rgb(${A.map((v, i) => Math.round(lerp(v, B[i], clamp(k)))).join(',')})`; }
@@ -170,23 +183,60 @@ function glow(c, x, y, r, col, a) {
   c.fillStyle = g; c.fillRect(x - r, y - r, r * 2, r * 2);
 }
 
-// Offscreen Gaussian blur buffer (depth-of-field & HUD rack-focus)
+// Offscreen Gaussian blur buffer (depth-of-field & HUD rack-focus) + static LRU cache
 const _tmp = typeof document !== 'undefined' ? document.createElement('canvas') : null;
 if (_tmp) { _tmp.width = W; _tmp.height = H; }
 const _tc = _tmp ? _tmp.getContext('2d') : null;
-function blurLayer(c, px, fn, extra = '') {
+const _blurCache = new Map();
+const _BLUR_CACHE_MAX = 8;
+function clearBlurCache() { _blurCache.clear(); }
+function blurLayer(c, px, fn, extra = '', cacheKey = null) {
   if (!_tc) { fn(c); return; }
-  const wasShortsWorld = _inShortsWorld;
+  const rs = getRenderScale();
+  const tw = Math.round(W * rs), th = Math.round(H * rs);
+  const filterStr = `blur(${(px * rs).toFixed(2)}px)${extra ? ' ' + extra : ''}`;
+
+  if (typeof cacheKey === 'string' && cacheKey.length > 0 && typeof document !== 'undefined') {
+    const fullKey = `${cacheKey}|${px}|${extra}|${tw}x${th}|${_inShortsWorld ? 1 : 0}`;
+    if (_blurCache.has(fullKey)) {
+      const hitCv = _blurCache.get(fullKey);
+      _blurCache.delete(fullKey);
+      _blurCache.set(fullKey, hitCv);
+      c.save(); c.drawImage(hitCv, 0, 0, W, H); c.restore();
+      return;
+    }
+    if (_blurCache.size >= _BLUR_CACHE_MAX) {
+      const oldestKey = _blurCache.keys().next().value;
+      _blurCache.delete(oldestKey);
+    }
+    ensureOffscreenSize(_tmp, rs);
+    const wasShortsRig = _inShortsRig;
+    _inShortsRig = false;
+    try {
+      _tc.setTransform(rs, 0, 0, rs, 0, 0); _tc.clearRect(0, 0, W, H); fn(_tc);
+    } finally {
+      _inShortsRig = wasShortsRig;
+    }
+    const cacheCv = document.createElement('canvas');
+    cacheCv.width = tw; cacheCv.height = th;
+    const cacheCtx = cacheCv.getContext('2d');
+    cacheCtx.filter = filterStr;
+    cacheCtx.drawImage(_tmp, 0, 0);
+    _blurCache.set(fullKey, cacheCv);
+    c.save(); c.drawImage(cacheCv, 0, 0, W, H); c.restore();
+    return;
+  }
+
+  ensureOffscreenSize(_tmp, rs);
   const wasShortsRig = _inShortsRig;
   _inShortsRig = false;
   try {
-    _tc.setTransform(1, 0, 0, 1, 0, 0); _tc.clearRect(0, 0, W, H); fn(_tc);
+    _tc.setTransform(rs, 0, 0, rs, 0, 0); _tc.clearRect(0, 0, W, H); fn(_tc);
   } finally {
     _inShortsRig = wasShortsRig;
   }
   c.save();
-  if (!wasShortsWorld) c.setTransform(1, 0, 0, 1, 0, 0);
-  c.filter = `blur(${px}px) ${extra}`; c.drawImage(_tmp, 0, 0); c.restore();
+  c.filter = filterStr; c.drawImage(_tmp, 0, 0, W, H); c.restore();
 }
 function flick(i, t, rate = 1) {
   const a = hash(i * 13.1 + Math.floor(t * 14 * rate));
@@ -330,11 +380,12 @@ function poseSquat(t, o = {}) {
 }
 function posePanic(t, o = {}) {
   const jitter = Math.sin((t || 0) * 24) * 1.5;
+  const wave = Math.sin((t || 0) * 14) * 0.14;
   return {
     by: (o.by || 0) + jitter,
-    lean: o.lean !== undefined ? o.lean : -0.08,
-    legs: o.legs || [{ a: 0.06, b: 0 }, { a: -0.06, b: 0 }],
-    arms: o.arms || [{ a: 2.38, b: -0.62 }, { a: 1.98, b: -0.48 }],
+    lean: o.lean !== undefined ? o.lean : -0.06,
+    legs: o.legs || [{ a: 0.08, b: 0 }, { a: -0.08, b: 0 }],
+    arms: o.arms || [{ a: 1.55 + wave, b: 1.50 }, { a: -1.45 - wave, b: -1.55 }],
     tilt: o.tilt !== undefined ? o.tilt : -0.06
   };
 }
@@ -344,7 +395,7 @@ function poseFacepalm(t, o = {}) {
     by: o.by || 0,
     lean: (o.lean !== undefined ? o.lean : 0.06) + sigh,
     legs: o.legs || [{ a: 0.04, b: 0 }, { a: -0.04, b: 0 }],
-    arms: o.arms || [{ a: 1.95, b: 1.12 }, { a: 0.18, b: 0.35 }],
+    arms: o.arms || [{ a: 1.62, b: 2.02 }, { a: -0.18, b: 0.35 }],
     tilt: o.tilt !== undefined ? o.tilt : 0.14
   };
 }
@@ -1469,32 +1520,36 @@ function drawStickerPerson(c, x, y, s, opts = {}, borderR = 7, overlayFn = null)
     drawSitcomPerson(c, x, y, s, opts);
     return;
   }
-  _sOffCtx.setTransform(1, 0, 0, 1, 0, 0);
+  const rs = getRenderScale();
+  ensureOffscreenSize(_stickerOff, rs);
+  ensureOffscreenSize(_stickerHalo, rs);
+
+  _sOffCtx.setTransform(rs, 0, 0, rs, 0, 0);
   _sOffCtx.clearRect(0, 0, W, H);
   drawSitcomPerson(_sOffCtx, x, y, s, opts);
   if (typeof overlayFn === 'function') overlayFn(_sOffCtx, x, y, s);
 
   _sHaloCtx.setTransform(1, 0, 0, 1, 0, 0);
   _sHaloCtx.globalCompositeOperation = 'source-over';
-  _sHaloCtx.clearRect(0, 0, W, H);
+  _sHaloCtx.clearRect(0, 0, _stickerHalo.width, _stickerHalo.height);
   _sHaloCtx.drawImage(_stickerOff, 0, 0);
   _sHaloCtx.globalCompositeOperation = 'source-in';
   _sHaloCtx.fillStyle = '#FFFFFF';
-  _sHaloCtx.fillRect(0, 0, W, H);
+  _sHaloCtx.fillRect(0, 0, _stickerHalo.width, _stickerHalo.height);
   _sHaloCtx.globalCompositeOperation = 'source-over';
 
   const rx = _inShortsWorld ? (borderR * 1.4 / SHORTS_SX) : borderR;
   const ry = _inShortsWorld ? (borderR * 1.4 / SHORTS_SY) : borderR;
   c.save();
   c.shadowColor = 'rgba(0,0,0,0.48)';
-  c.shadowBlur = 18;
-  c.shadowOffsetY = 8;
+  c.shadowBlur = 18 * rs;
+  c.shadowOffsetY = 8 * rs;
   for (let i = 0; i < 16; i++) {
     const a = (i / 16) * TAU;
-    c.drawImage(_stickerHalo, Math.cos(a) * rx, Math.sin(a) * ry);
+    c.drawImage(_stickerHalo, Math.cos(a) * rx, Math.sin(a) * ry, W, H);
   }
   c.shadowColor = 'transparent';
-  c.drawImage(_stickerOff, 0, 0);
+  c.drawImage(_stickerOff, 0, 0, W, H);
   c.restore();
 }
 
@@ -1572,10 +1627,12 @@ const _ripCtx = _ripOff ? _ripOff.getContext('2d') : null;
 
 function _captureOffscreen(offCtx, drawFn) {
   if (!offCtx || typeof drawFn !== 'function') return false;
+  const rs = getRenderScale();
+  ensureOffscreenSize(offCtx.canvas, rs);
   const wasShortsRig = _inShortsRig;
   _inShortsRig = false;
   try {
-    offCtx.setTransform(1, 0, 0, 1, 0, 0);
+    offCtx.setTransform(rs, 0, 0, rs, 0, 0);
     offCtx.clearRect(0, 0, W, H);
     drawFn(offCtx);
     return true;
@@ -1800,6 +1857,37 @@ function drawEvidencePhone(c, cx, cy, o = {}) {
   inkrr(c, -104, 182, 208, 44, 22, '#CBD5E1', 2, '#94A3B8');
   txt(c, o.btnText || 'ยืนยันการโอน', 0, 211, 18, '#64748B', 800, 'center');
 
+  if (o.cracked) {
+    // Crisp vector tempered-glass spiderweb shatter cracks (offset so headline stays razor-sharp)
+    c.save();
+    rr(c, -138, -242, 276, 486, 22); c.clip();
+    const ox = 56, oy = 68;
+    const rays = [
+      [-140, -210], [-30, -245], [88, -238], [142, -95],
+      [142, 62], [122, 232], [10, 245], [-138, 178], [-140, 25]
+    ];
+    c.strokeStyle = 'rgba(15,23,42,0.38)'; c.lineWidth = 2.4; c.lineCap = 'round';
+    for (const [rx, ry] of rays) {
+      c.beginPath(); c.moveTo(ox, oy); c.lineTo(rx, ry); c.stroke();
+    }
+    for (const rad of [30, 74, 132]) {
+      c.beginPath();
+      for (let i = 0; i <= 9; i++) {
+        const a = (i / 9) * TAU;
+        const px = ox + Math.cos(a) * rad, py = oy + Math.sin(a) * (rad * 1.12);
+        if (i === 0) c.moveTo(px, py); else c.lineTo(px, py);
+      }
+      c.stroke();
+    }
+    c.strokeStyle = 'rgba(255,255,255,0.88)'; c.lineWidth = 1.6;
+    for (const [rx, ry] of rays) {
+      c.beginPath(); c.moveTo(ox + 1.5, oy + 1.5); c.lineTo(rx + 1.5, ry + 1.5); c.stroke();
+    }
+    c.fillStyle = 'rgba(15,23,42,0.55)';
+    c.beginPath(); c.arc(ox, oy, 6, 0, TAU); c.fill();
+    c.restore();
+  }
+
   endShortsRigComp(_rc);
   c.restore();
 }
@@ -1830,7 +1918,7 @@ function drawComicInset(c, x, y, w, h, o = {}, drawContent) {
 function punchDeadpanZoom(c, lt, o = {}) {
   const shorts = isShortsMode();
   if (typeof o.bgFn === 'function') {
-    blurLayer(c, o.blur !== undefined ? o.blur : 5.8, (bc) => { o.bgFn(bc, lt); });
+    blurLayer(c, o.blur !== undefined ? o.blur : 5.8, (bc) => { o.bgFn(bc, lt); }, '', o.bgCacheKey || null);
   }
   c.fillStyle = o.tint || 'rgba(15, 23, 42, 0.25)';
   c.fillRect(0, 0, W, H);
@@ -1892,7 +1980,7 @@ function punchFreezeSpotlight(c, lt, o = {}) {
 
   c.save();
   c.filter = 'grayscale(100%) contrast(1.06) brightness(0.58)';
-  c.drawImage(_freezeOff, 0, 0);
+  c.drawImage(_freezeOff, 0, 0, W, H);
   c.restore();
 
   const shorts = isShortsMode();
@@ -1904,7 +1992,7 @@ function punchFreezeSpotlight(c, lt, o = {}) {
 
   c.save();
   c.beginPath(); c.ellipse(spotX, spotY, rx, ry, 0, 0, TAU); c.clip();
-  c.drawImage(_freezeOff, 0, 0);
+  c.drawImage(_freezeOff, 0, 0, W, H);
   const rim = c.createRadialGradient(spotX, spotY, rx * 0.5, spotX, spotY, rx);
   rim.addColorStop(0, 'rgba(254, 240, 138, 0)');
   rim.addColorStop(1, 'rgba(250, 204, 21, 0.25)');
@@ -2035,7 +2123,7 @@ function punchMangaImpact(c, lt, o = {}) {
 function punchEvidenceCutIn(c, lt, o = {}) {
   const shorts = isShortsMode();
   if (typeof o.bgFn === 'function') {
-    blurLayer(c, o.blur !== undefined ? o.blur : 5.2, (bc) => { o.bgFn(bc, lt); });
+    blurLayer(c, o.blur !== undefined ? o.blur : 5.2, (bc) => { o.bgFn(bc, lt); }, '', o.bgCacheKey || null);
   }
   c.fillStyle = o.tint || 'rgba(15, 23, 42, 0.34)';
   c.fillRect(0, 0, W, H);
@@ -2079,7 +2167,7 @@ function punchEvidenceCutIn(c, lt, o = {}) {
 function punchInScenePopOut(c, lt, o = {}) {
   const shorts = isShortsMode();
   if (typeof o.bgFn === 'function') {
-    blurLayer(c, o.blur !== undefined ? o.blur : 3.0, (bc) => { o.bgFn(bc, lt); });
+    blurLayer(c, o.blur !== undefined ? o.blur : 3.0, (bc) => { o.bgFn(bc, lt); }, '', o.bgCacheKey || null);
   }
   c.fillStyle = o.tint || 'rgba(15, 23, 42, 0.28)';
   c.fillRect(0, 0, W, H);
@@ -2117,7 +2205,7 @@ function punchInScenePopOut(c, lt, o = {}) {
       c.translate(hx, 420);
       c.rotate(o.angle !== undefined ? o.angle : -0.055);
       c.translate(-hx, -420);
-      c.drawImage(_popOff, 0, 0);
+      c.drawImage(_popOff, 0, 0, W, H);
       c.restore();
     }
   }
@@ -2151,12 +2239,13 @@ function punchExpectationRip(c, lt, o = {}) {
   if (okReal) {
     c.save();
     c.filter = o.realityFilter || 'saturate(0.42) brightness(0.84) contrast(1.06)';
-    c.drawImage(_ripOff, 0, 0);
+    c.drawImage(_ripOff, 0, 0, W, H);
     c.restore();
   }
   c.fillStyle = o.realityWash || 'rgba(30, 58, 138, 0.16)';
   c.fillRect(0, 0, W, H);
 
+  const rsRip = getRenderScale();
   c.save();
   c.beginPath();
   c.moveTo(0, -10);
@@ -2165,8 +2254,8 @@ function punchExpectationRip(c, lt, o = {}) {
   c.closePath();
   c.save();
   c.shadowColor = 'rgba(0,0,0,0.58)';
-  c.shadowBlur = 18;
-  c.shadowOffsetX = 9;
+  c.shadowBlur = 18 * rsRip;
+  c.shadowOffsetX = 9 * rsRip;
   c.fillStyle = '#FFFFFF';
   c.fill();
   c.restore();
@@ -2250,9 +2339,10 @@ if (grainCv) {
 }
 function grain(c, T, a = 0.02) {
   if (!grainCv) return;
+  const gw = isShortsMode() ? SHORTS_W : W, gh = isShortsMode() ? SHORTS_H : H;
   c.save(); c.globalAlpha = a; c.globalCompositeOperation = 'overlay';
   const ox = Math.floor(hash(Math.floor(T * 30)) * 256), oy = Math.floor(hash(Math.floor(T * 30) + 5) * 256);
-  c.translate(-ox, -oy); c.fillStyle = c.createPattern(grainCv, 'repeat'); c.fillRect(0, 0, W + 256, H + 256); c.restore();
+  c.translate(-ox, -oy); c.fillStyle = c.createPattern(grainCv, 'repeat'); c.fillRect(0, 0, gw + 256, gh + 256); c.restore();
 }
 
 // --------------------------------------------------------- SITCOM & SOCIAL MEDIA HUD CARDS, TELEMETRY & SUBTITLES
