@@ -142,10 +142,11 @@ Uses [`templates/generate_audio.js`](./templates/generate_audio.js) with **Stric
 
 ---
 
-## 4. Workflow Commands (HyperFrames + FFmpeg Hybrid & 16-Point QA)
+## 4. Workflow Commands (2-Gate Review + HyperFrames + FFmpeg Hybrid & 16-Point QA)
 
-> **⏸️ MANDATORY USER REVIEW GATE (ตรวจคลิปยาวก่อนทำคลิปสั้น):**
-> เมื่อสร้างและตรวจคลิปยาว (`master_hf.mp4` + ปก 16:9) ใน **Stage A** เสร็จแล้ว **ให้หยุดส่งคลิปยาวให้ผู้ใช้ตรวจสอบก่อนเสมอ ห้ามสั่งรัน Stage B (`generate_shorts_overlays.js`, `render_all_shorts.js`, หรือปก Shorts) อัตโนมัติจนกว่าผู้ใช้จะตรวจคลิปยาวเสร็จและบอกให้ทำคลิปสั้นต่อ** *(ยกเว้นกรณีผู้ใช้สั่งทำเฉพาะคลิปสั้นตั้งแต่ต้น)*
+> **⏸️ 2-GATE MANDATORY USER REVIEW RULE (ห้ามข้ามขั้นเรนเดอร์!):**
+> - **⏸️ GATE 1 — Pre-Render Scene Review (ตรวจทุกฉากก่อนเรนเดอร์คลิปยาว):** หลังรัน `node audit_all_scenes.js` และ AI ตรวจเบื้องต้นแล้ว **ต้องหยุดส่ง `audit_all_scenes.png` + `scene_review.html` (`scene_previews/`) + ตารางสรุปทุกฉากให้ผู้ใช้ตรวจสอบและอนุมัติก่อนเสมอ ห้ามสั่งเรนเดอร์ `master_hf.mp4` (`render_mp4.js` / `hf.js render`) อัตโนมัติ** จนกว่าผู้ใช้จะแก้ฉากจนพอใจและสั่งให้เรนเดอร์คลิปยาว *(ยกเว้นกรณีผู้ใช้สั่งชัดเจนแต่แรกว่าไม่ต้องรอตรวจฉาก)*; หากผู้ใช้ให้แก้เฉพาะบางฉาก ให้แก้ `views.js`/`episode.js` แล้วรัน `node audit_all_scenes.js --scenes <เลขฉาก>` ส่งให้ตรวจซ้ำก่อนเรนเดอร์!
+> - **⏸️ GATE 2 — Long-Form Review (ตรวจคลิปยาวก่อนทำคลิปสั้น):** เมื่อสร้างและตรวจคลิปยาว (`master_hf.mp4` + ปก 16:9) ใน **Stage A2** เสร็จแล้ว **ให้หยุดส่งคลิปยาวให้ผู้ใช้ตรวจสอบก่อนเสมอ ห้ามสั่งรัน Stage B (`generate_shorts_overlays.js`, `render_all_shorts.js`, หรือปก Shorts) อัตโนมัติจนกว่าผู้ใช้จะตรวจคลิปยาวเสร็จและบอกให้ทำคลิปสั้นต่อ** *(ยกเว้นกรณีผู้ใช้สั่งทำเฉพาะคลิปสั้นตั้งแต่ต้น)*
 
 ### เวิร์กโฟลว์ผสมตามจังหวะงาน (HyperFrames + FFmpeg)
 
@@ -157,14 +158,19 @@ Uses [`templates/generate_audio.js`](./templates/generate_audio.js) with **Stric
 | **4. เสียง, 9:16 Shorts & QA** | FFmpeg + QA Pipeline | `generate_audio.js` / `render_all_shorts.js` / `inspect_video.js master_hf.mp4 --strict` | คุมเสียง `-16/-14 LUFS`, ประกอบ Shorts 9:16, ตรวจ 16/16 QA |
 
 ```bash
-# --- Stage A: Long-Form 16:9 Native 1080p @ 30fps Master & QA (ส่งให้ผู้ใช้ตรวจก่อนเสมอ!) ---
+# --- Stage A1: Audio, Sync & All-Scene Visual Audit ---
 node generate_audio.js                                        # 1. Parallel TTS + Dual-Bus Comedy SFX + timeline.json (-16 LUFS)
 node sync_hyperframes.js                                      # 2. Sync Kanit fonts, GSAP, & scene clips into index.html (1920x1080@30fps)
 node hf.js lint && node hf.js check                           # 3. Verify 0 errors, 0 warnings in HyperFrames (use `hf.js preview` to scrub)
-node audit_all_scenes.js                                      # 4. Generate audit_all_scenes.png (GPU rasterized) & inspect via read_file
+node audit_all_scenes.js                                      # 4. Generate audit_all_scenes.png (4-col HD) + scene_previews/ + scene_review.html -> STOP!
+# node audit_all_scenes.js --scenes 2,5                       #    (Re-verify ONLY edited scenes -> audit_selected_scenes.png)
+# ⏸️ GATE 1: ส่ง audit_all_scenes.png + scene_review.html ให้ผู้ใช้ตรวจและอนุมัติทุกฉากก่อนเรนเดอร์คลิปยาว!
+
+# --- Stage A2: Long-Form 16:9 Native 1080p @ 30fps Master & QA (รันหลังผ่าน Gate 1 แล้ว!) ---
 node render_mp4.js --grade sitcom --cq 17 -o master_hf.mp4    # 5a. Fast Native 1080p @ 30fps NVENC Master (add `--hq` for lossless PNG pipe)
 # node hf.js render -f 30 -q looks --gpu --browser-gpu -o master_hf.mp4  # 5b. HyperFrames Studio Master (--start/--end, --resume, --resolution 4k, --format mov)
-node inspect_video.js master_hf.mp4 --strict                  # 6. Long-Form 16/16 QA Gate -> STOP & let user review master_hf.mp4!
+node inspect_video.js master_hf.mp4 --strict                  # 6. Long-Form 16/16 QA Gate -> STOP!
+# ⏸️ GATE 2: ส่ง master_hf.mp4 + ปก 16:9 ให้ผู้ใช้ตรวจและอนุมัติก่อนทำคลิปสั้น!
 
 # --- Stage B: Vertical Shorts & Covers (รันหลังผู้ใช้ตรวจคลิปยาวและสั่งให้ทำต่อเท่านั้น!) ---
 node render_pro_thumbnails.js                            # 7. Render High-CTR Comic Thumbnails (16:9 Showdown + 2x2 Grid) & Radial 9:16 Shorts Covers
