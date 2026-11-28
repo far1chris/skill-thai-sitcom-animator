@@ -175,7 +175,7 @@ node inspect_video.js master_hf.mp4 --strict                  # 6. Long-Form 16/
 # --- Stage B: Vertical Shorts & Covers (รันหลังผู้ใช้ตรวจคลิปยาวและสั่งให้ทำต่อเท่านั้น!) ---
 node render_pro_thumbnails.js                            # 7. Render High-CTR Comic Thumbnails (16:9 Showdown + 2x2 Grid) & Radial 9:16 Shorts Covers
 node generate_shorts_overlays.js                         # 8. Render Clean 2-Line Two-Tone Title Overlays (NO Pill/Red Box, NO leading EP)
-node render_all_shorts.js                                # 9. Render 45-60s Full-Screen Shorts (--format events|single|two_part, -14 LUFS)
+node render_all_shorts.js                                # 9. Render 45-60s Full-Screen Uniform 1:1 Shorts (default --framing crop; set focusX or pass --framing cinema|contain, -14 LUFS)
 node inspect_video.js shorts/<clip>.mp4 --shorts --strict # 10. Final Shorts 16/16 QA Gate (<= 60s, Safe Zone, Title SEO)
 ```
 *(For full-episode multi-agent delegation across Director, Sitcom View Artist, Visual QA, and Comedy SEO Writer, see [`references/sitcom-visual-and-comedy-guide.md`](./references/sitcom-visual-and-comedy-guide.md).)*

@@ -3,7 +3,8 @@
   lang="th"
   data-composition-variables='[
     {"id":"title","type":"string","label":"Episode Title","default":"Thai Adult Sitcom Animation"},
-    {"id":"shortsMode","type":"boolean","label":"Vertical Shorts Mode","default":false}
+    {"id":"shortsMode","type":"boolean","label":"Vertical Shorts Mode","default":false},
+    {"id":"shortsFraming","type":"string","label":"Shorts Framing (crop | cinema | contain)","default":"crop"}
   ]'
 >
 <head>
@@ -172,14 +173,23 @@
     applyBoxSize(cw, ch);
   }
   window.setShortsMode = setShortsMode;
+  function setShortsFraming(mode) {
+    window.__SHORTS_FRAMING = String(mode || 'crop').toLowerCase();
+  }
+  window.setShortsFraming = setShortsFraming;
 
   // Read HyperFrames composition variables if provided (--variables / Studio panel) or ?shorts=1
   if (/[?&]shorts=(?:1|true)/i.test(window.location.search)) {
     window.SHORTS_MODE = true;
   }
+  const framingMatch = window.location.search.match(/[?&]framing=(cinema|contain|crop)/i);
+  if (framingMatch) {
+    window.__SHORTS_FRAMING = framingMatch[1].toLowerCase();
+  }
   if (window.__hyperframes && typeof window.__hyperframes.getVariables === 'function') {
     const vars = window.__hyperframes.getVariables() || {};
     if (typeof vars.shortsMode === 'boolean') window.SHORTS_MODE = vars.shortsMode;
+    if (typeof vars.shortsFraming === 'string') window.__SHORTS_FRAMING = vars.shortsFraming.toLowerCase();
   }
   if (window.SHORTS_MODE) setShortsMode(true);
 
@@ -221,15 +231,21 @@
       rackBlur = ca * (activeCard.type === 'flow' ? 3.5 : 2.2);
     }
 
-    const worldActive = typeof beginShortsWorld === 'function' ? beginShortsWorld(ctx, s) : false;
-    if (fn) {
+    const drawScene = (targetCtx) => {
+      if (!fn) return;
       if (rackBlur > 0.35) {
-        blurLayer(ctx, rackBlur, (b) => fn(b, lt, s), `brightness(${(1 - rackBlur * 0.025).toFixed(2)})`);
+        blurLayer(targetCtx, rackBlur, (b) => fn(b, lt, s), `brightness(${(1 - rackBlur * 0.025).toFixed(2)})`);
       } else {
-        fn(ctx, lt, s);
+        fn(targetCtx, lt, s);
       }
+    };
+    if (shorts && typeof renderShortsWorld === 'function') {
+      renderShortsWorld(ctx, s, drawScene);
+    } else {
+      const worldActive = typeof beginShortsWorld === 'function' ? beginShortsWorld(ctx, s) : false;
+      drawScene(ctx);
+      if (typeof endShortsWorld === 'function') endShortsWorld(ctx, worldActive);
     }
-    if (typeof endShortsWorld === 'function') endShortsWorld(ctx, worldActive);
 
     const fadeIn  = prog(lt, 0, 0.12);
     const fadeOut = 1 - prog(lt, s.dur - 0.12, s.dur);

@@ -119,7 +119,9 @@ function findAudioSource(inMp4) {
   const outDir = path.join(projectDir, 'shorts');
   fs.mkdirSync(outDir, { recursive: true });
 
-  const requestedMode = (getArg('--mode') || cfg.mode || 'fullscreen').toLowerCase(); // 'fullscreen' (default 9:16 full-bleed) | 'crop' | 'letterbox' | 'zoom'
+  const requestedMode = (getArg('--mode') || cfg.mode || 'fullscreen').toLowerCase(); // 'fullscreen' (default 9:16 uniform 1:1) | 'crop' | 'letterbox' | 'zoom'
+  const framingArg = (getArg('--framing') || cfg.framing || cfg.shortsFraming || 'crop').toLowerCase();
+  const framing = (framingArg === 'cinema' || framingArg === 'contain') ? framingArg : 'crop';
   const format = hasFlag('--single') ? 'single' : (getArg('--format') || cfg.shortsFormat || undefined);
   const fps = getArg('--fps') || '30';
   const fpsNum = Number(fps) || 30;
@@ -163,7 +165,7 @@ function findAudioSource(inMp4) {
   const selected = onlyEvents
     ? epRanges.filter(item => item.isEvent)
     : (onlyEp ? epRanges.filter(item => item.ep === onlyEp && !item.isSingle && !item.isEvent) : epRanges);
-  console.log(`=== Rendering ${selected.length} Vertical Shorts (1080x1920, ${fps}fps, mode=${effectiveMode}${useNativeFullscreen ? ' [native canvas]' : ''}, ${lufs} LUFS, concurrency=${concurrency}, cap=${allowOver60 ? `${maxSec}s (override)` : `${Math.min(maxSec, 60)}s <= 60s`}) ===`);
+  console.log(`=== Rendering ${selected.length} Vertical Shorts (1080x1920, ${fps}fps, mode=${effectiveMode}${useNativeFullscreen ? ` [native 1:1 framing=${framing}]` : ''}, ${lufs} LUFS, concurrency=${concurrency}, cap=${allowOver60 ? `${maxSec}s (override)` : `${Math.min(maxSec, 60)}s <= 60s`}) ===`);
   console.log(`✓ Saved Shorts plan: ${path.relative(projectDir, planPath)} (${epRanges.length} EPs)`);
 
   for (const item of selected) {
@@ -207,11 +209,13 @@ function findAudioSource(inMp4) {
     if (browser) {
       page = await browser.newPage();
       await page.setViewport({ width: 1080, height: 1920, deviceScaleFactor: 1 });
-      await page.goto('file:///' + htmlPath.replace(/\\/g, '/') + '?shorts=1', { waitUntil: 'load' });
-      hasNativeSetter = await page.evaluate(async () => {
+      await page.goto('file:///' + htmlPath.replace(/\\/g, '/') + `?shorts=1&framing=${encodeURIComponent(framing)}`, { waitUntil: 'load' });
+      hasNativeSetter = await page.evaluate(async (fr) => {
         if (window.__setHeadless) window.__setHeadless();
         document.body.classList.add('headless', 'export-mode');
         await document.fonts.ready;
+        window.__SHORTS_FRAMING = fr;
+        if (typeof window.setShortsFraming === 'function') window.setShortsFraming(fr);
         if (typeof window.setShortsMode === 'function') {
           window.setShortsMode(true);
           return true;
@@ -225,15 +229,13 @@ function findAudioSource(inMp4) {
         }
         if (cvs) {
           cvs.style.position = 'absolute';
-          cvs.style.left = '50%';
+          cvs.style.left = '0';
           cvs.style.top = '0';
-          cvs.style.width = '1280px';
-          cvs.style.height = '720px';
-          cvs.style.transformOrigin = 'top center';
-          cvs.style.transform = 'translateX(-50%) scale(2.6667)';
+          cvs.style.width = '1080px';
+          cvs.style.height = '1920px';
         }
         return false;
-      });
+      }, framing);
     }
 
     try {
